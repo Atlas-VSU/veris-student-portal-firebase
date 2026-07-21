@@ -1,0 +1,240 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-nunito);
+  --font-serif: var(--font-fraunces);
+  --font-mono: var(--font-nunito);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  color-scheme: light !important;
+}
+
+:root {
+  --radius: 1.5rem;
+
+  /* Base - Organic Light Mode */
+  --background: #FDFCF8;
+  --foreground: #2C2C24;
+  --card: #FEFEFA;
+  --card-foreground: #2C2C24;
+  --popover: #FEFEFA;
+  --popover-foreground: #2C2C24;
+
+  /* Brand - Moss, Clay, Sand */
+  --primary: #5D7052;
+  --primary-foreground: #F3F4F1;
+  --secondary: #C18C5D;
+  --secondary-foreground: #FFFFFF;
+  --accent: #E6DCCD;
+  --accent-foreground: #4A4A40;
+  
+  --muted: #F0EBE5;
+  --muted-foreground: #78786C;
+  --border: #DED8CF;
+  --input: #DED8CF;
+  --ring: #5D7052;
+
+  --destructive: #A85448;
+
+  /* Semantic Map overrides */
+  --warning: #C18C5D;
+  --warning-foreground: #FFFFFF;
+  --warning-muted: #F0EBE5;
+
+  --success: #5D7052;
+  --success-foreground: #F3F4F1;
+  --success-muted: #F0EBE5;
+}
+
+/* Define base styles */
+* {
+  border-color: var(--border);
+  outline-color: color-mix(in oklch, var(--ring), transparent 50%);
+}
+
+/* Base64 Noise Overlay for tactile paper texture */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+}
+
+/* Font styles */
+html,
+body,
+* {
+  font-family: var(--font-nunito), system-ui, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6, .font-serif {
+  font-family: var(--font-fraunces), serif;
+}
+
+@theme {
+  --breakpoint-tablet: 43.75rem; 
+}
+
+/* Custom Fade Animations */
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 1s ease-out forwards;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 1s ease-out forwards;
+  }
+
+  .animate-page-enter {
+    animation: page-enter 0.3s ease-out forwards;
+  }
+
+  .delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  .delay-700 {
+    animation-delay: 0.7s;
+  }
+
+  .delay-1000 {
+    animation-delay: 1s;
+  }
+
+  .shadow-3xl {
+    box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Hero left-panel clip */
+  .hero-left-clip {
+    clip-path: polygon(0 0, 100% 0, 100% 93%, 0 100%);
+  }
+
+  @media (min-width: 1024px) {
+    .hero-left-clip {
+      clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-delayed {
+    animation: float 6s ease-in-out infinite 2s;
+  }
+
+  .animate-gentle-rotate {
+    animation: gentle-rotate 20s linear infinite;
+  }
+  /* Organic Wabi-Sabi Custom shapes */
+  .blob-shape-1 {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+  .blob-shape-2 {
+    border-radius: 50% 50% 30% 70% / 50% 60% 40% 50%;
+  }
+  .blob-shape-3 {
+    border-radius: 40% 60% 70% 30% / 40% 50% 50% 60%;
+  }
+
+  /* Asymmetric Card Radii */
+  .organic-card-1 { border-radius: 2rem 4rem 2rem 3rem; }
+  .organic-card-2 { border-radius: 3rem 2rem 4rem 2rem; }
+  .organic-card-3 { border-radius: 2rem 3rem 2rem 4rem; }
+  .organic-card-4 { border-radius: 4rem 2rem 3rem 2rem; }
+  .organic-card-5 { border-radius: 3rem 4rem 2rem 2rem; }
+  .organic-card-6 { border-radius: 2rem 2rem 4rem 3rem; }
+
+  /* Soft custom shadows */
+  .shadow-soft {
+    box-shadow: 0 4px 20px -2px rgba(93, 112, 82, 0.15);
+  }
+  .shadow-float {
+    box-shadow: 0 10px 40px -10px rgba(193, 140, 93, 0.2);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fade-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
+.animate-fade-in-up { animation: fade-in-up 0.6s ease-out forwards; }
+.animate-fade-in-left { animation: fade-in-left 0.6s ease-out forwards; }
+.animate-fade-in-right { animation: fade-in-right 0.6s ease-out forwards; }
+.animate-fade-in-slow { animation: fade-in 0.8s ease-out forwards; }
+
+.animation-delay-100 { animation-delay: 0.1s; }
+.animation-delay-200 { animation-delay: 0.15s; }
+.animation-delay-300 { animation-delay: 0.2s; }
+.animation-delay-400 { animation-delay: 0.25s; }
+.animation-delay-500 { animation-delay: 0.3s; }
+.animation-delay-600 { animation-delay: 0.35s; }
+.animation-delay-700 { animation-delay: 0.4s; }
+.animation-delay-800 { animation-delay: 0.45s; }
+.animation-delay-900 { animation-delay: 0.5s; }
+.animation-delay-1000 { animation-delay: 0.55s; }
+
+/* Custom Font Classes */
+.font-nunito {
+  font-family: var(--font-nunito), system-ui, sans-serif;
+}
+.font-fraunces {
+  font-family: var(--font-fraunces), serif;
+}
