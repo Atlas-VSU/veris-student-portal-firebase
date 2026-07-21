@@ -1,5 +1,3 @@
-import { Timestamp } from "firebase-admin/firestore";
-
 export interface StudentData {
   studentId: string;
   program: string;
