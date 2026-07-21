@@ -1,0 +1,27 @@
+export enum PaymentType {
+  FEES = "fees",
+  FINES = "fines",
+  BULK = "bulk"
+}
+
+export const PaymentMethods = ["cash", "gcash", "bank_transfer", "waiver"] as const;
+
+export type Term = {
+  id?: string,
+  AY: string,
+  semester: string,
+  isActive : boolean,
+}
+
+export type Organization = {
+  id?: string,
+  name: string,
+  shortName: string,
+  isArchived: boolean,
+  subscribed: boolean,
+  users?: string[],
+  facultyId?: string,
+  programId?: string,
+  accessLevel: number,
+  orgLogoUrl?: string
+}
