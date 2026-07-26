@@ -168,3 +168,21 @@ export async function sendUpdateLinkEmail(
 
   return { sent: true };
 }
+
+/**
+ * Securely masks an email address (e.g. "alex.smith@example.com" -> "al***@example.com").
+ */
+export function maskEmail(email: string): string {
+  const [localPart, domain] = email.split("@");
+  if (!localPart || !domain) return email;
+
+  let maskedLocal = "";
+  if (localPart.length <= 2) {
+    maskedLocal = localPart[0] + "*";
+  } else {
+    maskedLocal = localPart.slice(0, 2) + "*".repeat(Math.max(3, localPart.length - 2));
+  }
+
+  return `${maskedLocal}@${domain}`;
+}
+
