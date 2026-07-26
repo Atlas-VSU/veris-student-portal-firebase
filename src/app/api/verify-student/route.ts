@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/firebase/firebase-admin.config";
 import { Program } from "@/types/program";
+import { maskEmail } from "@/lib/email";
 
 type VerifyStudentRequest = {
   studentId?: string;
@@ -119,6 +120,7 @@ export async function POST(request: NextRequest) {
         name: `${userData.firstName ?? ""} ${userData.lastName ?? ""}`.trim(),
         firstName: userData.firstName ?? "",
         lastName: userData.lastName ?? "",
+        maskedEmail: userData.email ? maskEmail(userData.email) : "",
         program: program
           ? {
               id: program.id,
