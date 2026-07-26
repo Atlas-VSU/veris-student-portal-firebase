@@ -136,14 +136,17 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-serif text-foreground leading-[1.1] tracking-tight">
-            Manage your student dues and registration{" "}
-            <span className="text-secondary font-serif block sm:inline">
-              hassle-free.
+            Real-Time Eligibility.{" "}
+            <span className="text-primary font-serif block">
+              Effortless Settlement.
+            </span>{" "}
+            <span className="text-secondary font-serif block">
+              Total Clarity.
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto font-medium">
-            Welcome to the VERIS Student Portal. Self-register, update your profile record, and pay organization fees or fines in a secure online platform.
+            Streamline your semestral clearance process by tracking your organizational fees and fines, settle payments online, and monitor your clearance status in real-time.
           </p>
         </div>
 
