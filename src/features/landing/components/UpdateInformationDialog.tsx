@@ -75,7 +75,7 @@ export function UpdateInformationDialog({
   const [verifiedStudentName, setVerifiedStudentName] = useState("");
 
   // Step 2
-  const [email, setEmail] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
 
   const {
@@ -125,7 +125,7 @@ export function UpdateInformationDialog({
       setVerifiedStudentId("");
       setVerifiedProgramId("");
       setVerifiedStudentName("");
-      setEmail("");
+      setMaskedEmail("");
       resetForm();
     }
     onOpenChange(open);
@@ -145,6 +145,7 @@ export function UpdateInformationDialog({
       setVerifiedStudentId(data.studentId.trim());
       setVerifiedProgramId(data.programId);
       setVerifiedStudentName(result.student?.name ?? "");
+      setMaskedEmail(result.student?.maskedEmail ?? "");
       setStep("email");
     } catch (err: any) {
       setVerifyError(err.message || "Verification failed. Please try again.");
@@ -155,13 +156,12 @@ export function UpdateInformationDialog({
 
   const handleSendLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) { toast.error("Please enter your email address."); return; }
     setIsSending(true);
     try {
       const res = await fetch("/api/send-update-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: verifiedStudentId, programId: verifiedProgramId, email }),
+        body: JSON.stringify({ studentId: verifiedStudentId, programId: verifiedProgramId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send link.");
@@ -257,25 +257,18 @@ export function UpdateInformationDialog({
               </DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm max-w-sm">
                 {verifiedStudentName ? `Welcome, ${verifiedStudentName}. ` : ""}
-                Enter the email address where we should send your update link.
+                Please confirm to send the verification link.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleSendLink} className="space-y-5 mt-6">
-              <div className="space-y-2">
-                <Label className="text-foreground font-bold text-sm">Email Address</Label>
-                <Input
-                  type="email"
-                  placeholder="your_address@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSending}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  This email will also be saved to your student record.
-                </p>
+              <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 text-center space-y-1">
+                <p className="text-xs text-muted-foreground font-semibold">Registered Email Address</p>
+                <p className="text-lg font-bold font-mono text-foreground break-all">{maskedEmail}</p>
               </div>
+              <p className="text-xs text-center text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                For security reasons, the update link will be sent strictly to the registered email address associated with your student record.
+              </p>
 
               <div className="flex flex-col gap-3 pt-3">
                 <Button type="submit" disabled={isSending} className="w-full">
@@ -300,7 +293,7 @@ export function UpdateInformationDialog({
               </DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm max-w-sm">
                 We&apos;ve sent an update link to{" "}
-                <span className="font-bold text-foreground">{email}</span>.
+                <span className="font-bold text-foreground font-mono">{maskedEmail}</span>.
                 Click the link in the email to update your record.
               </DialogDescription>
             </DialogHeader>

@@ -11,7 +11,7 @@ const schema = z.object({
     .min(1, "Student ID is required")
     .regex(/^\d{2}-\d-\d{5}$/, "Invalid student ID format"),
   programId: z.string().min(1, "Program is required"),
-  email: z.string().email("Invalid email").min(5, "Email is required"),
+  email: z.string().email("Invalid email").min(5, "Email is required").optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { studentId, programId, email } = parsed.data;
+    const { studentId, programId } = parsed.data;
 
     // Verify the student exists, is approved, and matches the provided program
     const userSnap = await adminDb
@@ -45,6 +45,14 @@ export async function POST(request: NextRequest) {
 
     const userDoc = userSnap.docs[0];
     const userData = userDoc.data();
+
+    const registeredEmail = userData.email;
+    if (!registeredEmail) {
+      return NextResponse.json(
+        { success: false, error: "No email address registered for this student record." },
+        { status: 400 }
+      );
+    }
 
     if (userData.status !== "approved") {
       return NextResponse.json(
@@ -91,7 +99,7 @@ export async function POST(request: NextRequest) {
     await adminDb.collection("update_tokens").add({
       studentId,
       userId: userDoc.id,
-      email,
+      email: registeredEmail,
       token,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt,
@@ -101,7 +109,7 @@ export async function POST(request: NextRequest) {
     // Send email
     const baseUrl = request.nextUrl.origin;
     const updateUrl = `${baseUrl}/update-record?token=${token}`;
-    const { mocked } = await sendUpdateLinkEmail(email, updateUrl);
+    const { mocked } = await sendUpdateLinkEmail(registeredEmail, updateUrl);
 
     return NextResponse.json(
       {
