@@ -335,10 +335,9 @@ export async function GET(request: NextRequest) {
 
       const latestRejectionReason = getLatestRejectedReason(finePaymentLogs);
       const latestHistoryState = getLatestPaymentHistoryState(finePaymentLogs);
-      const paymentState = latestHistoryState
+      let paymentState = latestHistoryState
         ? normalizePaymentState(latestHistoryState)
         : normalizePaymentState(fine.status);
-      const isPayable = paymentState === "unpaid" || paymentState === "rejected";
 
       const outstanding = asNumber(fine.balance) > 0 ? asNumber(fine.balance) : asNumber(fine.accumulatedAmount);
       
@@ -357,6 +356,12 @@ export async function GET(request: NextRequest) {
           });
         }
       }
+
+      if (paymentState === "verified" && items.length > 0) {
+        paymentState = "unpaid";
+      }
+
+      const isPayable = paymentState === "unpaid" || paymentState === "rejected";
 
       if (AY && semester && fineItemsSnapshot.empty) continue;
 
