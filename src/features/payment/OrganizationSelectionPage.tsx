@@ -69,6 +69,10 @@ export default function OrganizationSelectionPage({
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
 
   const isOrganizationPayable = (organization: OrganizationData) => {
+    if (organization.outstandingAmount > 0) {
+      return true;
+    }
+
     const summary = organization.paymentSummary;
     if (summary) {
       return summary.unpaid > 0 || summary.rejected > 0;
