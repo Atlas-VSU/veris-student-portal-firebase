@@ -46,10 +46,16 @@ export default function FinesFeesSelectionPage({
 
   const getPaymentStatus = (item: {
     isPayable?: boolean;
-    paymentState?: "unpaid" | "pending" | "rejected";
+    paymentState?: "unpaid" | "pending" | "rejected" | "verified";
     latestRejectionReason?: string;
   }) => {
-    if (item.paymentState === "pending" || item.isPayable === false) {
+    if (item.paymentState === "verified") {
+      return {
+        label: "Approved",
+        className: "border-green-600/20 bg-green-600/10 text-green-700",
+      };
+    }
+    if (item.paymentState === "pending" || (!item.isPayable && item.paymentState !== "rejected")) {
       return {
         label: "Pending",
         className: "border-secondary/20 bg-secondary/10 text-secondary",
@@ -264,7 +270,9 @@ export default function FinesFeesSelectionPage({
                   </div>
                   {!hasPayableFees && (
                     <p className="text-xs text-amber-600 px-1 font-medium">
-                      All fee items are currently pending verification and cannot be selected.
+                      {fees.some(f => f.paymentState === "pending")
+                        ? "All fee items are currently pending verification or verified and cannot be selected."
+                        : "All fee items are already verified and cannot be selected."}
                     </p>
                   )}
                   <Separator className="bg-border/50" />
@@ -374,7 +382,9 @@ export default function FinesFeesSelectionPage({
                   </div>
                   {!hasPayableFineItems && (
                     <p className="text-xs text-amber-600 px-1 font-medium">
-                      All fine items are currently pending verification and cannot be selected.
+                      {fineItems.some(f => f.isPending)
+                        ? "All fine items are currently pending verification or verified and cannot be selected."
+                        : "All fine items are already verified and cannot be selected."}
                     </p>
                   )}
                   <Separator className="bg-border/50" />
