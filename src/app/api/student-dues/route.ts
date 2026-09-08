@@ -289,7 +289,9 @@ export async function GET(request: NextRequest) {
       else if (paymentState === "rejected") existing.paymentSummary.rejected += 1;
       else existing.paymentSummary.unpaid += 1;
 
-      existing.feeAmount += outstanding > 0 ? outstanding : 0;
+      if (isPayable) {
+        existing.feeAmount += outstanding > 0 ? outstanding : 0;
+      }
       existing.fees.push({
         id: fee.id,
         description: fee.title || fee.feeType || "Outstanding Fee",
@@ -373,7 +375,9 @@ export async function GET(request: NextRequest) {
       else if (paymentState === "rejected") existing.paymentSummary.rejected += 1;
       else if (paymentState === "unpaid" && fine.fineItemsCount! > 0) existing.paymentSummary.unpaid += 1;
 
-      existing.fineAmount += outstanding > 0 ? outstanding : 0;
+      if (isPayable) {
+        existing.fineAmount += outstanding > 0 ? outstanding : 0;
+      }
       existing.fines.push({
         id: fine.id,
         description: fine.reason || "Outstanding Fine",
