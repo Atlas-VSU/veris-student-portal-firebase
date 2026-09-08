@@ -358,7 +358,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (AY && semester && items.length === 0) continue;
+      if (AY && semester && fineItemsSnapshot.empty) continue;
 
       const existing = grouped.get(fine.orgId) ?? {
         orgId: fine.orgId,
