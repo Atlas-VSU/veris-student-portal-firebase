@@ -133,7 +133,7 @@ const normalizePaymentState = (
   status: unknown
 ): "unpaid" | "pending" | "rejected" | "verified" => {
   if (status === "pending") return "pending";
-  if (status === "verified") return "verified";
+  if (status === "verified" || status === "approved") return "verified";
   if (status === "rejected") return "rejected";
   return "unpaid";
 };
@@ -143,7 +143,7 @@ const getLatestPaymentHistoryState = (
 ): "pending" | "verified" | "rejected" | undefined => {
   const latest = logs
     .map((log) => ({
-      status: log.status,
+      status: log.status === "approved" ? "verified" : log.status,
       updatedAt: Math.max(
         toMillis(log.verifiedAt),
         toMillis(log.metaData?.updatedAt),
@@ -289,7 +289,9 @@ export async function GET(request: NextRequest) {
       else if (paymentState === "rejected") existing.paymentSummary.rejected += 1;
       else existing.paymentSummary.unpaid += 1;
 
-      existing.feeAmount += outstanding > 0 ? outstanding : 0;
+      if (isPayable) {
+        existing.feeAmount += outstanding > 0 ? outstanding : 0;
+      }
       existing.fees.push({
         id: fee.id,
         description: fee.title || fee.feeType || "Outstanding Fee",
@@ -333,10 +335,9 @@ export async function GET(request: NextRequest) {
 
       const latestRejectionReason = getLatestRejectedReason(finePaymentLogs);
       const latestHistoryState = getLatestPaymentHistoryState(finePaymentLogs);
-      const paymentState = latestHistoryState
+      let paymentState = latestHistoryState
         ? normalizePaymentState(latestHistoryState)
         : normalizePaymentState(fine.status);
-      const isPayable = paymentState === "unpaid" || paymentState === "rejected";
 
       const outstanding = asNumber(fine.balance) > 0 ? asNumber(fine.balance) : asNumber(fine.accumulatedAmount);
       
@@ -356,7 +357,13 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (AY && semester && items.length === 0) continue;
+      if (paymentState === "verified" && items.length > 0) {
+        paymentState = "unpaid";
+      }
+
+      const isPayable = paymentState === "unpaid" || paymentState === "rejected";
+
+      if (AY && semester && fineItemsSnapshot.empty) continue;
 
       const existing = grouped.get(fine.orgId) ?? {
         orgId: fine.orgId,
@@ -373,7 +380,9 @@ export async function GET(request: NextRequest) {
       else if (paymentState === "rejected") existing.paymentSummary.rejected += 1;
       else if (paymentState === "unpaid" && fine.fineItemsCount! > 0) existing.paymentSummary.unpaid += 1;
 
-      existing.fineAmount += outstanding > 0 ? outstanding : 0;
+      if (isPayable) {
+        existing.fineAmount += outstanding > 0 ? outstanding : 0;
+      }
       existing.fines.push({
         id: fine.id,
         description: fine.reason || "Outstanding Fine",

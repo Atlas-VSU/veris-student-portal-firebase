@@ -146,8 +146,11 @@ export default function PaymentPage() {
     setCurrentStep("fees");
   };
 
-  const handleBackToOrganization = () => {
+  const handleBackToOrganization = async () => {
     setCurrentStep("organization");
+    if (studentData && selectedTerm) {
+      await loadStudentDues(studentData.studentId, selectedTerm.AY, selectedTerm.semester);
+    }
   };
 
   const handleFeesSelected = (items: SelectedPaymentItems) => {
@@ -155,8 +158,11 @@ export default function PaymentPage() {
     setCurrentStep("payment");
   };
 
-  const handleBackToFees = () => {
+  const handleBackToFees = async () => {
     setCurrentStep("fees");
+    if (studentData && selectedTerm) {
+      await loadStudentDues(studentData.studentId, selectedTerm.AY, selectedTerm.semester);
+    }
   };
 
   return (
