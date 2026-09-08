@@ -133,7 +133,7 @@ const normalizePaymentState = (
   status: unknown
 ): "unpaid" | "pending" | "rejected" | "verified" => {
   if (status === "pending") return "pending";
-  if (status === "verified") return "verified";
+  if (status === "verified" || status === "approved") return "verified";
   if (status === "rejected") return "rejected";
   return "unpaid";
 };
@@ -143,7 +143,7 @@ const getLatestPaymentHistoryState = (
 ): "pending" | "verified" | "rejected" | undefined => {
   const latest = logs
     .map((log) => ({
-      status: log.status,
+      status: log.status === "approved" ? "verified" : log.status,
       updatedAt: Math.max(
         toMillis(log.verifiedAt),
         toMillis(log.metaData?.updatedAt),
