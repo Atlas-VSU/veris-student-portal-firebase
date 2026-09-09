@@ -27,7 +27,7 @@ export function PaymentBrandHeader({ stepLabel }: PaymentBrandHeaderProps) {
           <span className="text-lg font-bold font-serif leading-none tracking-wide text-foreground">
             VERIS
           </span>
-          <span className="mt-1 inline-flex w-fit items-center rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
+          <span className="mt-1 inline-flex w-fit items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest text-primary">
             Payment Portal
           </span>
         </div>
