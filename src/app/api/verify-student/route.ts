@@ -49,11 +49,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Deliberately unfiltered by isDeleted. A student retired by the roster
+    // sync still owes — and can still settle — dues from the terms they WERE
+    // enrolled in, so refusing them at verification left those records
+    // unreachable and unpayable. A live record always wins when both exist.
     const userSnapshot = await adminDb
       .collection("users")
       .where("studentId", "==", studentId)
-      .where("isDeleted", "==", false)
-      .limit(1)
       .get();
 
     if (userSnapshot.empty) {
@@ -66,8 +68,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userDoc = userSnapshot.docs[0];
+    const userDoc =
+      userSnapshot.docs.find((doc) => doc.data().isDeleted !== true) ??
+      userSnapshot.docs[0];
     const userData = userDoc.data();
+    const isArchived = userData.isDeleted === true;
 
     if (userData.status !== "approved") {
       return NextResponse.json(
@@ -121,6 +126,9 @@ export async function POST(request: NextRequest) {
         firstName: userData.firstName ?? "",
         lastName: userData.lastName ?? "",
         maskedEmail: userData.email ? maskEmail(userData.email) : "",
+        /** Retired by the roster sync — no longer enrolled, but historical
+         *  terms remain payable. Drives the term-step messaging. */
+        isArchived,
         program: program
           ? {
               id: program.id,
