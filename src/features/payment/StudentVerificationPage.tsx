@@ -148,6 +148,7 @@ export default function StudentVerificationPage({ onVerified, currentStep }: Stu
       program: result.student.program?.name || PROGRAM_NAMES[data.program] || data.program,
       programShortName: result.student.program?.shortName || null,
       programAcronym: result.student.program?.acronym || null,
+      isArchived: result.student.isArchived === true,
     };
   };
 
