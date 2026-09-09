@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CalendarDays, ArrowLeft, BookOpen, Building2, Receipt, AlertCircle, CheckCircle2, UserCircle } from "lucide-react";
+import { CalendarDays, ArrowLeft, BookOpen, Building2, Receipt, AlertCircle, CheckCircle2, Loader2, UserCircle } from "lucide-react";
 import { PaymentBrandHeader } from "./components/PaymentBrandHeader";
 import { PaymentProgressBar } from "./components/PaymentProgressBar";
 import { StudentData, TermData, OrganizationData, FeeItem, Fine, FineItem } from "./types";
@@ -19,6 +19,9 @@ interface FinesFeesSelectionPageProps {
   fees: FeeItem[];
   fines: Fine[];
   fineItems: FineItem[];
+  /** True while the parent is re-fetching dues — coming back to this step
+   *  reloads them, and without this the stale amounts sit there unmarked. */
+  isLoading?: boolean;
   onBack: () => void;
   onNext: (selectedItems: {
     fees: FeeItem[];
@@ -27,7 +30,7 @@ interface FinesFeesSelectionPageProps {
     feeAmount: number;
     fineAmount: number;
     totalAmount: number;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 export default function FinesFeesSelectionPage({
@@ -37,12 +40,28 @@ export default function FinesFeesSelectionPage({
   fees,
   fines,
   fineItems,
+  isLoading = false,
   onBack,
   onNext,
   selectedTerm,
 }: FinesFeesSelectionPageProps) {
-  const [payFees, setPayFees] = useState(false);
-  const [payFines, setPayFines] = useState(false);
+  // Selection is per item. It used to be two all-or-nothing switches, so a
+  // student who could only afford one fine had to pay every fine at once.
+  const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(new Set());
+  const [selectedFineItemIds, setSelectedFineItemIds] = useState<Set<string>>(new Set());
+  const [isAdvancing, setIsAdvancing] = useState(false);
+
+  const toggleId = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    (id: string) =>
+      setter((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+
+  const toggleFee = toggleId(setSelectedFeeIds);
+  const toggleFineItem = toggleId(setSelectedFineItemIds);
 
   const getPaymentStatus = (item: {
     isPayable?: boolean;
@@ -99,50 +118,108 @@ export default function FinesFeesSelectionPage({
     return parsed.toLocaleDateString();
   };
 
-  // Calculate totals
-  const feesTotal = useMemo(() => {
-    return fees.reduce((sum, fee) => sum + fee.amount, 0);
-  }, [fees]);
-
-  const finesTotal = useMemo(() => {
-    return fineItems.reduce((sum, fine) => sum + fine.amount, 0);
-  }, [fineItems]);
-
   const payableFees = useMemo(() => fees.filter((fee) => fee.isPayable !== false), [fees]);
-  const payableFineItems = useMemo(() => fineItems.filter((fine) => fine.isPending !== true), [fineItems]);
+  // `isPayable` is computed per item on the server from that item's own flags.
+  // Filtering on `!isPending` alone counted settled items as payable now that
+  // the API returns them, so the student could see paid fines offered for
+  // payment again.
+  const payableFineItems = useMemo(
+    () => fineItems.filter((fine) => (fine.isPayable ?? !fine.isPending) && !fine.isPaid),
+    [fineItems]
+  );
   const pendingFines = useMemo(() => fineItems.filter((fine) => fine.isPending === true), [fineItems]);
   const payableFines = useMemo(() => payableFineItems.length > 0 ? fines : [], [fines, payableFineItems]);
 
-  const feesPayableTotal = useMemo(() => {
+  // The card headers show what is still OWED. They used to sum every row
+  // including settled ones, so the header total silently disagreed with the
+  // "Pay All" figure directly beneath it with nothing to explain the gap.
+  const feesTotal = useMemo(() => {
     return payableFees.reduce((sum, fee) => sum + fee.amount, 0);
   }, [payableFees]);
 
-  const finesPayableTotal = useMemo(() => {
+  const finesTotal = useMemo(() => {
     return payableFineItems.reduce((sum, fine) => sum + fine.amount, 0);
   }, [payableFineItems]);
+
+  // ── What the student has actually ticked ──────────────────────────────────
+  const selectedFees = useMemo(
+    () => payableFees.filter((fee) => selectedFeeIds.has(fee.id)),
+    [payableFees, selectedFeeIds]
+  );
+
+  const selectedFineItems = useMemo(
+    () => payableFineItems.filter((item) => selectedFineItemIds.has(item.refId)),
+    [payableFineItems, selectedFineItemIds]
+  );
+
+  const feesPayableTotal = useMemo(
+    () => selectedFees.reduce((sum, fee) => sum + fee.amount, 0),
+    [selectedFees]
+  );
+
+  const finesPayableTotal = useMemo(
+    () => selectedFineItems.reduce((sum, item) => sum + item.amount, 0),
+    [selectedFineItems]
+  );
 
   const fineById = useMemo(() => {
     return new Map(fines.map((fine) => [fine.id, fine]));
   }, [fines]);
 
-  const grandTotal = (payFees ? feesPayableTotal : 0) + (payFines ? finesPayableTotal : 0);
+  // Only the parent fines the chosen items actually belong to — the payment
+  // step reads this list, so carrying unrelated fines through would attach the
+  // wrong parent to the submission.
+  const selectedParentFines = useMemo(() => {
+    const parentIds = new Set(selectedFineItems.map((item) => item.parentFineId));
+    return fines.filter((fine) => parentIds.has(fine.id));
+  }, [fines, selectedFineItems]);
 
-  const handleContinue = () => {
-    if (payFees || payFines) {
-      onNext({
-        fees: payFees ? payableFees : [],
-        fines: payFines ? payableFines : [],
-        fineItems: payFines ? fineItems : [],
-        feeAmount: payFees ? feesPayableTotal : 0,
-        fineAmount: payFines ? finesPayableTotal : 0,
+  const grandTotal = feesPayableTotal + finesPayableTotal;
+
+  const handleContinue = async () => {
+    if (isAdvancing) return;
+    if (selectedFees.length === 0 && selectedFineItems.length === 0) return;
+
+    // Awaited so the button reports progress rather than going dead if the
+    // parent ever loads anything before advancing.
+    setIsAdvancing(true);
+    try {
+      await onNext({
+        fees: selectedFees,
+        fines: selectedParentFines,
+        fineItems: selectedFineItems,
+        feeAmount: feesPayableTotal,
+        fineAmount: finesPayableTotal,
         totalAmount: grandTotal,
       });
+    } finally {
+      setIsAdvancing(false);
     }
   };
 
-  const hasSelection = payFees || payFines;
-  const hasPayableFees = payableFees.length > 0;
-  const hasPayableFineItems = payableFineItems.length > 0;
+  // A student the roster sync has retired is no longer enrolled, so their
+  // records are history to review rather than dues to settle. Nothing here is
+  // selectable, and `submit-payment` refuses them server-side regardless.
+  const isViewOnly = studentData.isArchived === true;
+
+  const hasSelection =
+    !isViewOnly && (selectedFees.length > 0 || selectedFineItems.length > 0);
+  const selectedCount = selectedFees.length + selectedFineItems.length;
+  const hasPayableFees = !isViewOnly && payableFees.length > 0;
+  const hasPayableFineItems = !isViewOnly && payableFineItems.length > 0;
+
+  // ── Select-all helpers, kept so paying everything is still one click ───────
+  const allFeesSelected = hasPayableFees && selectedFees.length === payableFees.length;
+  const allFinesSelected =
+    hasPayableFineItems && selectedFineItems.length === payableFineItems.length;
+
+  const toggleAllFees = (checked: boolean) =>
+    setSelectedFeeIds(checked ? new Set(payableFees.map((fee) => fee.id)) : new Set());
+
+  const toggleAllFineItems = (checked: boolean) =>
+    setSelectedFineItemIds(
+      checked ? new Set(payableFineItems.map((item) => item.refId)) : new Set()
+    );
 
   return (
     <div className="min-h-screen bg-background py-8 pb-36 px-4 relative overflow-hidden font-sans">
@@ -218,6 +295,21 @@ export default function FinesFeesSelectionPage({
           </CardContent>
         </Card>
 
+        {isViewOnly && (
+          <Card className="border-amber-300 bg-amber-50 shadow-soft">
+            <CardContent className="px-6 py-4">
+              <p className="text-sm font-bold text-amber-800">
+                View only — you are no longer enrolled
+              </p>
+              <p className="text-xs text-amber-700 font-medium mt-0.5">
+                These are your records and payment history for this term. They are shown
+                for reference and cannot be paid against. If you believe this is wrong,
+                contact your organization.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Fees Section */}
           <Card className="h-fit bg-card border border-border/50 shadow-soft">
@@ -225,13 +317,13 @@ export default function FinesFeesSelectionPage({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Receipt className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-bold font-serif">Membership Fees</CardTitle>
+                  <CardTitle className="text-xl font-bold font-serif">Organization Fees</CardTitle>
                 </div>
                 <Badge variant="outline" className="text-primary rounded-full font-bold">
                   ₱{feesTotal.toFixed(2)}
                 </Badge>
               </div>
-              <CardDescription className="text-sm text-muted-foreground">Required membership and registration fees</CardDescription>
+              <CardDescription className="text-sm text-muted-foreground">All fees for your organization this semester</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Pay All Fees Toggle */}
@@ -239,7 +331,7 @@ export default function FinesFeesSelectionPage({
                 <>
                   <div
                     className={`flex items-center space-x-3 p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
-                      payFees
+                      allFeesSelected
                         ? "bg-primary/10 border-primary shadow-soft"
                         : hasPayableFees
                           ? "bg-white/50 border-border hover:bg-primary/5 cursor-pointer"
@@ -247,22 +339,27 @@ export default function FinesFeesSelectionPage({
                     }`}
                     onClick={() => {
                       if (!hasPayableFees) return;
-                      setPayFees(!payFees);
+                      toggleAllFees(!allFeesSelected);
                     }}
                   >
                     <Checkbox
                       id="pay-all-fees"
-                      checked={payFees}
+                      checked={allFeesSelected}
                       disabled={!hasPayableFees}
                       onCheckedChange={(checked) => {
                         if (!hasPayableFees) return;
-                        setPayFees(checked === true);
+                        toggleAllFees(checked === true);
                       }}
                       onClick={(e) => e.stopPropagation()}
                       className="rounded-md border-border bg-white data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus-visible:ring-primary/30"
                     />
                     <span className="text-sm font-bold leading-none flex-1 text-foreground">
-                      Pay All Fees
+                      Select All Fees
+                      {selectedFees.length > 0 && !allFeesSelected && (
+                        <span className="ml-2 font-medium text-muted-foreground">
+                          ({selectedFees.length} of {payableFees.length} selected)
+                        </span>
+                      )}
                     </span>
                     <span className="text-lg font-bold text-primary">
                       ₱{feesPayableTotal.toFixed(2)}
@@ -282,13 +379,39 @@ export default function FinesFeesSelectionPage({
 
               {/* Fee Items Breakdown */}
               <div className="space-y-3">
-                {fees.map((fee) => (
+                {fees.map((fee) => {
+                  const isSelectable = !isViewOnly && fee.isPayable !== false;
+                  const isSelected = selectedFeeIds.has(fee.id);
+
+                  return (
                   <div
                     key={fee.id}
-                    className={`flex items-start justify-between gap-4 p-4 rounded-xl border ${
-                      fee.isPayable === false ? "bg-secondary/5 border-border/50" : "bg-white/50 border-border/30"
+                    role={isSelectable ? "button" : undefined}
+                    tabIndex={isSelectable ? 0 : undefined}
+                    onClick={() => isSelectable && toggleFee(fee.id)}
+                    onKeyDown={(event) => {
+                      if (!isSelectable) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleFee(fee.id);
+                      }
+                    }}
+                    className={`flex items-start justify-between gap-4 p-4 rounded-xl border transition-colors ${
+                      !isSelectable
+                        ? "bg-secondary/5 border-border/50"
+                        : isSelected
+                          ? "bg-primary/10 border-primary cursor-pointer"
+                          : "bg-white/50 border-border/30 hover:bg-primary/5 cursor-pointer"
                     }`}
                   >
+                    <Checkbox
+                      checked={isSelected}
+                      disabled={!isSelectable}
+                      aria-label={`Select ${fee.description}`}
+                      onCheckedChange={() => isSelectable && toggleFee(fee.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 rounded-md border-border bg-white data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus-visible:ring-primary/30"
+                    />
                     <div className="flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-bold text-foreground">{fee.description}</p>
@@ -309,7 +432,10 @@ export default function FinesFeesSelectionPage({
                           Status: Pending verification (not selectable)
                         </p>
                       )}
-                      {fee.latestRejectionReason && (
+                      {/* A fee that was declined, resubmitted and approved
+                          showed "Approved" alongside the old rejection reason.
+                          Only surface it while the fee is actually declined. */}
+                      {fee.latestRejectionReason && fee.paymentState === "rejected" && (
                         <p className="text-xs text-destructive font-medium">
                           Last rejected reason: {fee.latestRejectionReason}
                         </p>
@@ -319,7 +445,8 @@ export default function FinesFeesSelectionPage({
                       ₱{fee.amount.toFixed(2)}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {fees.length === 0 && (
@@ -351,7 +478,7 @@ export default function FinesFeesSelectionPage({
                 <>
                   <div
                     className={`flex items-center space-x-3 p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
-                      payFines
+                      allFinesSelected
                         ? "bg-secondary/10 border-secondary shadow-soft"
                         : hasPayableFineItems
                           ? "bg-white/50 border-border hover:bg-secondary/5 cursor-pointer"
@@ -359,22 +486,27 @@ export default function FinesFeesSelectionPage({
                     }`}
                     onClick={() => {
                       if (!hasPayableFineItems) return;
-                      setPayFines(!payFines);
+                      toggleAllFineItems(!allFinesSelected);
                     }}
                   >
                     <Checkbox
                       id="pay-all-fines"
-                      checked={payFines}
+                      checked={allFinesSelected}
                       disabled={!hasPayableFineItems}
                       onCheckedChange={(checked) => {
                         if (!hasPayableFineItems) return;
-                        setPayFines(checked === true);
+                        toggleAllFineItems(checked === true);
                       }}
                       onClick={(e) => e.stopPropagation()}
                       className="rounded-md border-border bg-white data-[state=checked]:bg-secondary data-[state=checked]:text-secondary-foreground focus-visible:ring-secondary/30"
                     />
                     <span className="text-sm font-bold leading-none flex-1 text-foreground">
-                      Pay All Fines
+                      Select All Fines
+                      {selectedFineItems.length > 0 && !allFinesSelected && (
+                        <span className="ml-2 font-medium text-muted-foreground">
+                          ({selectedFineItems.length} of {payableFineItems.length} selected)
+                        </span>
+                      )}
                     </span>
                     <span className="text-lg font-bold text-secondary">
                       ₱{finesPayableTotal.toFixed(2)}
@@ -396,19 +528,49 @@ export default function FinesFeesSelectionPage({
               <div className="space-y-3">
                 {fineItems.map((fine) => {
                   const parentFine = fineById.get(fine.parentFineId);
+                  // The item's own state, computed server-side from its own
+                  // flags. It used to read the PARENT's rejection, so one
+                  // declined submission marked every unpaid item under that
+                  // fine "Declined" — including items raised afterwards that
+                  // were never submitted at all.
                   const status = getPaymentStatus({
-                    isPayable: !fine?.isPending,
-                    paymentState: parentFine?.latestRejectionReason ? "rejected" : fine.isPending ? "pending" : "unpaid",
-                    latestRejectionReason: parentFine?.latestRejectionReason,
+                    isPayable: fine.isPayable ?? !fine.isPending,
+                    paymentState: fine.paymentState ?? (fine.isPending ? "pending" : "unpaid"),
+                    latestRejectionReason: fine.latestRejectionReason,
                   });
+
+                  const isSelectable = !isViewOnly && (fine.isPayable ?? !fine.isPending) && !fine.isPaid;
+                  const isSelected = selectedFineItemIds.has(fine.refId);
 
                   return (
                     <div
                       key={fine.refId}
-                      className={`flex items-start justify-between gap-4 p-4 rounded-xl border ${
-                        fine.isPending ? "bg-secondary/5 border-border/50" : "bg-white/50 border-border/30"
+                      role={isSelectable ? "button" : undefined}
+                      tabIndex={isSelectable ? 0 : undefined}
+                      onClick={() => isSelectable && toggleFineItem(fine.refId)}
+                      onKeyDown={(event) => {
+                        if (!isSelectable) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleFineItem(fine.refId);
+                        }
+                      }}
+                      className={`flex items-start justify-between gap-4 p-4 rounded-xl border transition-colors ${
+                        !isSelectable
+                          ? "bg-secondary/5 border-border/50"
+                          : isSelected
+                            ? "bg-secondary/10 border-secondary cursor-pointer"
+                            : "bg-white/50 border-border/30 hover:bg-secondary/5 cursor-pointer"
                       }`}
                     >
+                      <Checkbox
+                        checked={isSelected}
+                        disabled={!isSelectable}
+                        aria-label={`Select ${fine.title}`}
+                        onCheckedChange={() => isSelectable && toggleFineItem(fine.refId)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 rounded-md border-border bg-white data-[state=checked]:bg-secondary data-[state=checked]:text-secondary-foreground focus-visible:ring-secondary/30"
+                      />
                       <div className="flex-1 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-bold text-foreground">{fine.title}</p>
@@ -427,9 +589,16 @@ export default function FinesFeesSelectionPage({
                             Status: Pending verification (not selectable)
                           </p>
                         )}
-                        {parentFine?.latestRejectionReason && !fine.isPending && (
+                        {fine.isPaid && !fine.isPending && (
+                          <p className="text-xs text-green-700 font-medium">
+                            {fine.isWaived ? "Waived by the organization" : "Settled"}
+                          </p>
+                        )}
+                        {/* Only the items that were actually in the declined
+                            submission carry its reason. */}
+                        {fine.latestRejectionReason && !fine.isPending && (
                           <p className="text-xs text-destructive font-medium">
-                            Last rejected reason: {parentFine.latestRejectionReason}
+                            Last rejected reason: {fine.latestRejectionReason}
                           </p>
                         )}
                       </div>
@@ -455,16 +624,49 @@ export default function FinesFeesSelectionPage({
         <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-float">
           <div className="mx-auto max-w-5xl flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground font-medium">Total Amount</p>
-              <p className="text-2xl font-bold font-serif text-primary">₱{grandTotal.toFixed(2)}</p>
+              {isViewOnly ? (
+                <>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Outstanding on record for this term
+                  </p>
+                  <p className="text-2xl font-bold font-serif text-muted-foreground">
+                    ₱{(feesTotal + finesTotal).toFixed(2)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                    {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {isLoading
+                      ? "Refreshing your dues…"
+                      : selectedCount > 0
+                        ? `Total for ${selectedCount} selected item${selectedCount === 1 ? "" : "s"}`
+                        : "Select the items you want to pay"}
+                  </p>
+                  <p className="text-2xl font-bold font-serif text-primary">₱{grandTotal.toFixed(2)}</p>
+                </>
+              )}
             </div>
-            <Button
-              onClick={handleContinue}
-              disabled={!hasSelection}
-              className="px-8"
-            >
-              Continue to Payment
-            </Button>
+            {isViewOnly ? (
+              <Button variant="outline" onClick={onBack} className="px-8">
+                Back to Terms
+              </Button>
+            ) : (
+              <Button
+                onClick={handleContinue}
+                disabled={!hasSelection || isAdvancing || isLoading}
+                className="px-8 gap-2"
+              >
+                {isAdvancing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading…
+                  </>
+                ) : (
+                  "Continue to Payment"
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

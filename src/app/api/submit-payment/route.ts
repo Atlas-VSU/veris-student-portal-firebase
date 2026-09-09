@@ -10,8 +10,13 @@ const unpaidDueSchema = z.object({
   amount:       z.number().positive(),
   paymentType:  z.enum(["fees", "fines"]),
   parentFineId: z.string().default(""),
-  academicYear: z.string().default("2025-2026"),
-  semester:     z.string().default("2nd"),
+  // Required, not defaulted. These build the clearance document id, so a
+  // silent default files the payment against the wrong term — and the defaults
+  // here ("2025-2026"/"2nd") disagreed with the ones the form used
+  // ("2026-2027"/"1st"), so the same missing field produced two different
+  // clearance documents depending on the path. Rejecting is the safe failure.
+  academicYear: z.string().min(1, "Academic year is required for each due"),
+  semester:     z.string().min(1, "Semester is required for each due"),
 });
 
 const submitPaymentSchema = z.object({
@@ -73,11 +78,12 @@ export async function POST(request: NextRequest) {
 
     const now = FieldValue.serverTimestamp();
 
+    // Unfiltered, so a retired student is told WHY they cannot pay rather than
+    // being reported as non-existent — verification already lets them in to
+    // read their history.
     const userSnapshot = await adminDb
       .collection("users")
       .where("studentId", "==", payload.studentId)
-      .where("isDeleted", "==", false)
-      .limit(1)
       .get();
 
     if (userSnapshot.empty) {
@@ -87,7 +93,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = userSnapshot.docs[0].id;
+    const userDoc =
+      userSnapshot.docs.find((doc) => doc.data().isDeleted !== true) ??
+      userSnapshot.docs[0];
+
+    // The real enforcement of the read-only rule. The term step and the
+    // selection step both hide payment for a retired student, but neither is a
+    // guarantee — a replayed or hand-built request must not create a payment
+    // against someone who is no longer enrolled.
+    if (userDoc.data().isDeleted === true) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This student is no longer enrolled. Past records can be viewed, but no new payment can be submitted against them.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const userId = userDoc.id;
 
     const feeIds = payload.dues.filter(d => d.paymentType === "fees").map(d => d.refId);
     const fineItemIds = payload.dues.filter(d => d.paymentType === "fines").map(d => d.refId);
@@ -120,7 +145,11 @@ export async function POST(request: NextRequest) {
     const proofRef = adminDb.collection("proofOfPayments").doc();
     const itemKeys: string[] = [];
     const items: object[] = [];
-    let clearanceId = "";
+    // Every term touched by this submission. `clearanceId` used to be a single
+    // variable reassigned on each pass, so when dues spanned two terms the
+    // per-due `blockingItems` writes landed correctly but the parent
+    // `status: "pending"` only reached whichever term happened to come last.
+    const clearanceIds = new Set<string>();
 
     for (const due of payload.dues) {
       const parentId = due.paymentType === "fines" ? due.parentFineId : due.refId;
@@ -156,7 +185,8 @@ export async function POST(request: NextRequest) {
       }, { merge: true });
 
       const termSuffix = `:${due.academicYear}-${due.semester}`.replace(/\s/g, '_');
-      clearanceId = `${userId}${payload.orgId}${termSuffix}`;
+      const clearanceId = `${userId}${payload.orgId}${termSuffix}`;
+      clearanceIds.add(clearanceId);
 
       batch.set(adminDb.collection("clearanceStatus").doc(clearanceId), {
         blockingItems: {
@@ -228,9 +258,14 @@ export async function POST(request: NextRequest) {
       itemKeys,
     });
 
-    batch.set(adminDb.collection("clearanceStatus").doc(clearanceId), {
-      status: "pending",
-    }, { merge: true });
+    // One write per term touched, not just the last one. `recalculateClearanceStatus`
+    // on the admin side recomputes this from blockingItems, so "pending" here
+    // matches the vocabulary it already uses ('cleared' | 'pending' | 'not_cleared').
+    for (const clearanceId of clearanceIds) {
+      batch.set(adminDb.collection("clearanceStatus").doc(clearanceId), {
+        status: "pending",
+      }, { merge: true });
+    }
 
     await batch.commit();
 
@@ -249,17 +284,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function checkForBlockedDues(feeIds: string[], fineIds: string[]) {
-  const BLOCKING_STATUSES = ["pending", "verified"];
+/** Settled in the admin apps' vocabulary — see student-dues for the full set. */
+const SETTLED_RECORD_STATUSES = new Set(["paid", "waived"]);
 
+async function checkForBlockedDues(feeIds: string[], fineIds: string[]) {
+  /**
+   * A record is blocked while a submission is awaiting review, or once it is
+   * fully settled.
+   *
+   * "verified" used to block on its own, which made partial payments
+   * impossible: the admin's `approvePaymentTransaction` marks a fee "partial"
+   * and leaves a real balance, but the verified log from that first instalment
+   * then blocked every attempt to clear the remainder. Settlement is now read
+   * from the record itself — the balance the admin maintains — so a part-paid
+   * fee stays payable while a fully paid one is still refused.
+   */
   const isBlocked = async (col: string, docId: string) => {
-    const snap = await adminDb
-      .collection(col).doc(docId)
-      .collection("paymentHistory")
-      .where("status", "in", BLOCKING_STATUSES)
-      .limit(1)
-      .get();
-    return snap.empty ? null : docId;
+    const [pendingSnap, recordSnap] = await Promise.all([
+      adminDb
+        .collection(col).doc(docId)
+        .collection("paymentHistory")
+        .where("status", "==", "pending")
+        .limit(1)
+        .get(),
+      adminDb.collection(col).doc(docId).get(),
+    ]);
+
+    if (!pendingSnap.empty) return docId;
+
+    const record = recordSnap.data();
+    if (!record) return null;
+
+    const balance = record.balance;
+    const settled =
+      SETTLED_RECORD_STATUSES.has(String(record.status)) ||
+      (typeof balance === "number" && balance <= 0);
+
+    return settled ? docId : null;
   };
 
   const [blockedFees, blockedFines] = await Promise.all([
