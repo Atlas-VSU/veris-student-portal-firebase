@@ -144,7 +144,7 @@ export default function OrganizationSelectionPage({
 
         {/* Term & Student Info Banner Card */}
         <Card className="border-border bg-primary/5 shadow-soft">
-          <CardContent className="px-6 py-4 space-y-4">
+          <CardContent className="px-4 sm:px-6 py-4 space-y-4">
             {/* Term Row */}
             {selectedTerm && (
               <>
@@ -193,7 +193,7 @@ export default function OrganizationSelectionPage({
               Choose the organization you want to pay fees or fines for
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-6 pt-4">
+          <CardContent className="px-4 sm:px-6 pt-4">
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -225,7 +225,7 @@ export default function OrganizationSelectionPage({
                             : "border-border bg-white/50"
                         }`}
                       >
-                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                           {/* The org's own logo when it has one, falling back
                               to the generic icon. A plain <img> rather than
                               next/image because these are remote Storage URLs
@@ -253,7 +253,7 @@ export default function OrganizationSelectionPage({
                               <h3 className="font-bold text-base text-foreground leading-tight">
                                 {org.name}
                               </h3>
-                              <Badge variant="secondary" className="text-[10px] sm:text-xs shrink-0 rounded-full font-bold uppercase">
+                              <Badge variant="secondary" className="text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase">
                                 {org.acronym}
                               </Badge>
                               {(() => {
@@ -272,7 +272,7 @@ export default function OrganizationSelectionPage({
                                     <Badge
                                       key={status}
                                       variant="outline"
-                                      className={`text-[10px] sm:text-xs shrink-0 rounded-full font-bold uppercase ${badge.className}`}
+                                      className={`text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase ${badge.className}`}
                                     >
                                       {badge.label}
                                     </Badge>

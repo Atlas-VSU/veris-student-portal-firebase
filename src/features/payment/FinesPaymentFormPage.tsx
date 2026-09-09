@@ -747,7 +747,7 @@ export default function FinesPaymentFormPage({
 
           {/* Bottom Floating Bar */}
           <div
-            className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-float"
+            className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-float"
             style={{ bottom: keyboardOffset > 0 ? `${keyboardOffset}px` : 0 }}
           >
             <div className="mx-auto max-w-2xl">
@@ -761,7 +761,7 @@ export default function FinesPaymentFormPage({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground font-medium">Total Amount</p>
                     {isContextualFlow && (
-                      <p className="text-[10px] text-muted-foreground font-medium">Includes {feeCount} fees + {fineCount} fines</p>
+                      <p className="text-[11px] text-muted-foreground font-medium">Includes {feeCount} fees + {fineCount} fines</p>
                     )}
                     <p className="text-2xl font-bold font-serif text-primary">₱{mobileTotal.toFixed(2)}</p>
                   </div>
@@ -786,7 +786,7 @@ export default function FinesPaymentFormPage({
 function FieldError({ message }: { message: string }) {
   return (
     <p className="text-xs text-destructive flex items-center gap-1.5 mt-1.5 font-bold">
-      <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white leading-none">!</span>
+      <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[11px] font-bold text-white leading-none">!</span>
       {message}
     </p>
   );
@@ -803,7 +803,7 @@ function SectionHeading({
 }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-soft">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-soft">
         {number}
       </span>
       <p className="text-sm font-bold text-foreground">

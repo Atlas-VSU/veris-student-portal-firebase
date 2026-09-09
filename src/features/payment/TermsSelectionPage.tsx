@@ -129,7 +129,7 @@ export default function TermsSelectionPage({
 
         {/* Student Info Banner Card */}
         <Card className="border-border bg-primary/5 shadow-soft">
-          <CardContent className="px-6 py-4">
+          <CardContent className="px-4 sm:px-6 py-4">
             <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <UserCircle className="h-6 w-6 text-primary" />
@@ -159,7 +159,7 @@ export default function TermsSelectionPage({
               Choose the term to view and settle your outstanding dues
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-6 pt-4">
+          <CardContent className="px-4 sm:px-6 pt-4">
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -205,17 +205,17 @@ export default function TermsSelectionPage({
                           : "border-border bg-white/50 cursor-pointer hover:border-primary/50 hover:bg-primary/5"
                     }`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <div className={`p-3 rounded-xl shrink-0 ${selectable ? "bg-primary/10" : "bg-muted"}`}>
                         <CalendarDays className={`h-5 w-5 ${selectable ? "text-primary" : "text-muted-foreground"}`} />
                       </div>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex flex-col min-[450px]:flex-row min-[450px]:items-center gap-1 sm:gap-2">
                           <p className="font-bold text-base text-foreground">
                             {term.displayName}
                           </p>
                           {term.isActive && (
-                            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold text-primary uppercase">
+                            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary uppercase">
                               Current Term
                             </span>
                           )}

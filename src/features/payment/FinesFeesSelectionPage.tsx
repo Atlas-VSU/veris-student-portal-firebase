@@ -241,7 +241,7 @@ export default function FinesFeesSelectionPage({
 
         {/* Term, Student & Organization Info Banner Card */}
         <Card className="border-border bg-primary/5 shadow-soft">
-          <CardContent className="py-5 space-y-4">
+          <CardContent className="px-4 sm:px-6 py-5 space-y-4">
             {/* Term Row */}
             {selectedTerm && (
               <>
@@ -297,7 +297,7 @@ export default function FinesFeesSelectionPage({
 
         {isViewOnly && (
           <Card className="border-amber-300 bg-amber-50 shadow-soft">
-            <CardContent className="px-6 py-4">
+            <CardContent className="px-4 sm:px-6 py-4">
               <p className="text-sm font-bold text-amber-800">
                 View only — you are no longer enrolled
               </p>
@@ -330,7 +330,7 @@ export default function FinesFeesSelectionPage({
               {fees.length > 0 && (
                 <>
                   <div
-                    className={`flex items-center space-x-3 p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
                       allFeesSelected
                         ? "bg-primary/10 border-primary shadow-soft"
                         : hasPayableFees
@@ -353,7 +353,7 @@ export default function FinesFeesSelectionPage({
                       onClick={(e) => e.stopPropagation()}
                       className="rounded-md border-border bg-white data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus-visible:ring-primary/30"
                     />
-                    <span className="text-sm font-bold leading-none flex-1 text-foreground">
+                    <span className="text-sm font-bold leading-snug flex-1 min-w-0 text-foreground">
                       Select All Fees
                       {selectedFees.length > 0 && !allFeesSelected && (
                         <span className="ml-2 font-medium text-muted-foreground">
@@ -361,7 +361,7 @@ export default function FinesFeesSelectionPage({
                         </span>
                       )}
                     </span>
-                    <span className="text-lg font-bold text-primary">
+                    <span className="text-lg font-bold text-primary shrink-0 tabular-nums">
                       ₱{feesPayableTotal.toFixed(2)}
                     </span>
                   </div>
@@ -396,7 +396,7 @@ export default function FinesFeesSelectionPage({
                         toggleFee(fee.id);
                       }
                     }}
-                    className={`flex items-start justify-between gap-4 p-4 rounded-xl border transition-colors ${
+                    className={`flex items-start justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-colors ${
                       !isSelectable
                         ? "bg-secondary/5 border-border/50"
                         : isSelected
@@ -418,7 +418,7 @@ export default function FinesFeesSelectionPage({
                         {(() => {
                           const status = getPaymentStatus(fee);
                           return (
-                            <Badge variant="outline" className={`rounded-full font-bold uppercase text-[9px] ${status.className}`}>
+                            <Badge variant="outline" className={`rounded-full font-bold uppercase text-[11px] ${status.className}`}>
                               {status.label}
                             </Badge>
                           );
@@ -441,7 +441,7 @@ export default function FinesFeesSelectionPage({
                         </p>
                       )}
                     </div>
-                    <span className="text-sm font-bold text-primary ml-4">
+                    <span className="text-sm font-bold text-primary shrink-0 tabular-nums">
                       ₱{fee.amount.toFixed(2)}
                     </span>
                   </div>
@@ -477,7 +477,7 @@ export default function FinesFeesSelectionPage({
               {(pendingFines.length > 0 || payableFines.length > 0) && (
                 <>
                   <div
-                    className={`flex items-center space-x-3 p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:p-4 rounded-[1.5rem] border-2 transition-all duration-300 ${
                       allFinesSelected
                         ? "bg-secondary/10 border-secondary shadow-soft"
                         : hasPayableFineItems
@@ -500,7 +500,7 @@ export default function FinesFeesSelectionPage({
                       onClick={(e) => e.stopPropagation()}
                       className="rounded-md border-border bg-white data-[state=checked]:bg-secondary data-[state=checked]:text-secondary-foreground focus-visible:ring-secondary/30"
                     />
-                    <span className="text-sm font-bold leading-none flex-1 text-foreground">
+                    <span className="text-sm font-bold leading-snug flex-1 min-w-0 text-foreground">
                       Select All Fines
                       {selectedFineItems.length > 0 && !allFinesSelected && (
                         <span className="ml-2 font-medium text-muted-foreground">
@@ -508,7 +508,7 @@ export default function FinesFeesSelectionPage({
                         </span>
                       )}
                     </span>
-                    <span className="text-lg font-bold text-secondary">
+                    <span className="text-lg font-bold text-secondary shrink-0 tabular-nums">
                       ₱{finesPayableTotal.toFixed(2)}
                     </span>
                   </div>
@@ -555,7 +555,7 @@ export default function FinesFeesSelectionPage({
                           toggleFineItem(fine.refId);
                         }
                       }}
-                      className={`flex items-start justify-between gap-4 p-4 rounded-xl border transition-colors ${
+                      className={`flex items-start justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-colors ${
                         !isSelectable
                           ? "bg-secondary/5 border-border/50"
                           : isSelected
@@ -574,7 +574,7 @@ export default function FinesFeesSelectionPage({
                       <div className="flex-1 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-bold text-foreground">{fine.title}</p>
-                          <Badge variant="outline" className={`rounded-full font-bold uppercase text-[9px] ${status.className}`}>
+                          <Badge variant="outline" className={`rounded-full font-bold uppercase text-[11px] ${status.className}`}>
                             {status.label}
                           </Badge>
                         </div>
@@ -602,7 +602,7 @@ export default function FinesFeesSelectionPage({
                           </p>
                         )}
                       </div>
-                      <span className="text-sm font-bold text-secondary ml-4">
+                      <span className="text-sm font-bold text-secondary shrink-0 tabular-nums">
                         ₱{fine.amount.toFixed(2)}
                       </span>
                     </div>
@@ -621,8 +621,8 @@ export default function FinesFeesSelectionPage({
         </div>
 
         {/* Floating Checkout Bar at the Bottom */}
-        <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-float">
-          <div className="mx-auto max-w-5xl flex items-center justify-between gap-4">
+        <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-float">
+          <div className="mx-auto max-w-5xl flex items-center justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
               {isViewOnly ? (
                 <>
@@ -643,19 +643,19 @@ export default function FinesFeesSelectionPage({
                         ? `Total for ${selectedCount} selected item${selectedCount === 1 ? "" : "s"}`
                         : "Select the items you want to pay"}
                   </p>
-                  <p className="text-2xl font-bold font-serif text-primary">₱{grandTotal.toFixed(2)}</p>
+                  <p className="text-xl sm:text-2xl font-bold font-serif text-primary tabular-nums">₱{grandTotal.toFixed(2)}</p>
                 </>
               )}
             </div>
             {isViewOnly ? (
-              <Button variant="outline" onClick={onBack} className="px-8">
+              <Button variant="outline" onClick={onBack} className="shrink-0 px-6 sm:px-8">
                 Back to Terms
               </Button>
             ) : (
               <Button
                 onClick={handleContinue}
                 disabled={!hasSelection || isAdvancing || isLoading}
-                className="px-8 gap-2"
+                className="shrink-0 px-6 sm:px-8 gap-2"
               >
                 {isAdvancing ? (
                   <>
