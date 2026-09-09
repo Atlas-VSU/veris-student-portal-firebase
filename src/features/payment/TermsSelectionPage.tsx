@@ -14,13 +14,18 @@ interface Term {
   semester: string;
   displayName: string;
   isActive?: boolean;
+  /** Whether this student holds any record for the term. Absent when the API
+   *  was called without a studentId. */
+  hasRecords?: boolean;
 }
 
 interface TermsSelectionPageProps {
   studentData: StudentData;
   currentStep: 1 | 2 | 3 | 4 | 5;
   onBack: () => void;
-  onNext: (selectedTerm: { AY: string; semester: string }) => void;
+  /** May be async — the parent loads the student's dues before advancing, so
+   *  the button has to stay responsive for the length of that fetch. */
+  onNext: (selectedTerm: { AY: string; semester: string }) => void | Promise<void>;
 }
 
 export default function TermsSelectionPage({
@@ -32,12 +37,17 @@ export default function TermsSelectionPage({
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTerms = async () => {
       try {
-        const res = await fetch("/api/terms");
+        // Scoped to the student so each term can say whether they were
+        // actually enrolled in it.
+        const res = await fetch(
+          `/api/terms?studentId=${encodeURIComponent(studentData.studentId)}`
+        );
         const data = await res.json();
 
         if (!res.ok || !data.success) {
@@ -53,12 +63,46 @@ export default function TermsSelectionPage({
     };
 
     void fetchTerms();
-  }, []);
+  }, [studentData.studentId]);
 
-  const handleContinue = () => {
+  // A retired student is no longer enrolled anywhere, so what they can still
+  // reach is their own history: viewable, not payable.
+  const isViewOnly = studentData.isArchived === true;
+
+  /**
+   * Whether the student was enrolled in a term.
+   *
+   * PAST terms have no direct marker, so they are inferred from the trace the
+   * student left (clearance, dues, a payment). The CURRENT term does have one:
+   * `isDeleted` is a statement about now. Inferring it from records too was
+   * wrong — leftover unarchived records made a retired student look enrolled,
+   * which is exactly what happens when the roster sync ran `additiveOnly`, when
+   * its archiving covered only part of the record set, or when someone set
+   * `isDeleted` by hand. The direct signal settles the current term.
+   */
+  const isEnrolled = (term: Term) => {
+    if (term.isActive && isViewOnly) return false;
+    return term.hasRecords !== false;
+  };
+
+  const isSelectable = isEnrolled;
+
+  const openableTerms = terms.filter(isSelectable);
+  const notEnrolledInCurrentTerm = terms.some(
+    (term) => term.isActive && !isEnrolled(term)
+  );
+
+  const handleContinue = async () => {
     const selected = terms.find((t) => t.id === selectedTermId);
-    if (selected) {
-      onNext({ AY: selected.AY, semester: selected.semester });
+    if (!selected || !isSelectable(selected) || isAdvancing) return;
+
+    // The parent fetches the student's dues before it swaps the step, so
+    // without this the button simply stops responding for the whole request.
+    setIsAdvancing(true);
+    try {
+      await onNext({ AY: selected.AY, semester: selected.semester });
+    } finally {
+      setIsAdvancing(false);
     }
   };
 
@@ -85,7 +129,7 @@ export default function TermsSelectionPage({
 
         {/* Student Info Banner Card */}
         <Card className="border-border bg-primary/5 shadow-soft">
-          <CardContent className="px-6 py-4">
+          <CardContent className="px-4 sm:px-6 py-4">
             <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <UserCircle className="h-6 w-6 text-primary" />
@@ -115,7 +159,7 @@ export default function TermsSelectionPage({
               Choose the term to view and settle your outstanding dues
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-6 pt-4">
+          <CardContent className="px-4 sm:px-6 pt-4">
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -131,38 +175,74 @@ export default function TermsSelectionPage({
               </div>
             ) : (
               <div className="space-y-4">
-                {terms.map((term) => (
+                {notEnrolledInCurrentTerm && (
+                  <div className="rounded-[1.25rem] border border-amber-300 bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-bold text-amber-800">
+                      You are not enrolled for the current term
+                    </p>
+                    <p className="text-xs text-amber-700 font-medium mt-0.5">
+                      {openableTerms.length > 0
+                        ? "Your earlier terms are listed below. They are view only — you can review your records and payments, but no new payment can be made against them."
+                        : "We could not find any records for you in the terms listed. Please contact your organization."}
+                    </p>
+                  </div>
+                )}
+
+                {terms.map((term) => {
+                  const selectable = isSelectable(term);
+
+                  return (
                   <button
                     key={term.id}
-                    onClick={() => setSelectedTermId(term.id)}
-                    className={`w-full text-left p-4 rounded-[1.5rem] border-2 transition-all duration-300 hover:border-primary/50 hover:bg-primary/5 flex items-center cursor-pointer justify-between gap-4 outline-none ${
-                      selectedTermId === term.id
-                        ? "border-primary bg-primary/5 shadow-soft"
-                        : "border-border bg-white/50"
+                    onClick={() => selectable && setSelectedTermId(term.id)}
+                    disabled={!selectable}
+                    aria-disabled={!selectable}
+                    className={`w-full text-left p-4 rounded-[1.5rem] border-2 transition-all duration-300 flex items-center justify-between gap-4 outline-none ${
+                      !selectable
+                        ? "border-border bg-muted/30 opacity-70 cursor-not-allowed"
+                        : selectedTermId === term.id
+                          ? "border-primary bg-primary/5 shadow-soft cursor-pointer hover:border-primary/50 hover:bg-primary/5"
+                          : "border-border bg-white/50 cursor-pointer hover:border-primary/50 hover:bg-primary/5"
                     }`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-xl bg-primary/10 shrink-0">
-                        <CalendarDays className="h-5 w-5 text-primary" />
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className={`p-3 rounded-xl shrink-0 ${selectable ? "bg-primary/10" : "bg-muted"}`}>
+                        <CalendarDays className={`h-5 w-5 ${selectable ? "text-primary" : "text-muted-foreground"}`} />
                       </div>
-                      <div className="flex flex-col min-[450px]:flex-row min-[450px]:items-center gap-1 sm:gap-2">
-                        <p className="font-bold text-base text-foreground">
-                          {term.displayName}
-                        </p>
-                        {term.isActive && (
-                          <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold text-primary uppercase">
-                            Current Term
-                          </span>
-                        )}
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <div className="flex flex-col min-[450px]:flex-row min-[450px]:items-center gap-1 sm:gap-2">
+                          <p className="font-bold text-base text-foreground">
+                            {term.displayName}
+                          </p>
+                          {term.isActive && (
+                            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary uppercase">
+                              Current Term
+                            </span>
+                          )}
+                        </div>
+                        {!selectable ? (
+                          <p className="text-xs font-medium text-amber-700">
+                            {term.isActive
+                              ? "You are not enrolled for this term"
+                              : "No records for this term"}
+                          </p>
+                        ) : isViewOnly ? (
+                          <p className="text-xs font-medium text-muted-foreground">
+                            View only — records and payment history
+                          </p>
+                        ) : null}
                       </div>
                     </div>
-                    <ChevronRight
-                      className={`h-5 w-5 shrink-0 transition-transform duration-300 ${
-                        selectedTermId === term.id ? "text-primary translate-x-0.5" : "text-muted-foreground"
-                      }`}
-                    />
+                    {selectable && (
+                      <ChevronRight
+                        className={`h-5 w-5 shrink-0 transition-transform duration-300 ${
+                          selectedTermId === term.id ? "text-primary translate-x-0.5" : "text-muted-foreground"
+                        }`}
+                      />
+                    )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -172,11 +252,20 @@ export default function TermsSelectionPage({
         <div className="flex justify-end">
           <Button
             onClick={handleContinue}
-            disabled={!selectedTermId || isLoading}
+            disabled={!selectedTermId || isLoading || isAdvancing}
             className="w-full min-[400px]:w-auto gap-2"
           >
-            View Organizations
-            <ChevronRight className="h-4 w-4" />
+            {isAdvancing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading your records…
+              </>
+            ) : (
+              <>
+                {isViewOnly ? "View Records" : "View Organizations"}
+                <ChevronRight className="h-4 w-4" />
+              </>
+            )}
           </Button>
         </div>
       </div>

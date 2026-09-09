@@ -18,7 +18,7 @@ interface OrganizationSelectionPageProps {
   isLoading?: boolean;
   error?: string | null;
   onBack: () => void;
-  onNext: (organizationId: string) => void;
+  onNext: (organizationId: string) => void | Promise<void>;
 }
 
 const getStatusBadge = (status: "unpaid" | "pending" | "rejected" | "verified" | "cleared") => {
@@ -67,8 +67,16 @@ export default function OrganizationSelectionPage({
   selectedTerm,
 }: OrganizationSelectionPageProps) {
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  // A logo URL can be stale or unreachable; falling back to the icon keeps the
+  // row from rendering a broken image.
+  const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set());
+  const [isAdvancing, setIsAdvancing] = useState(false);
 
   const isOrganizationPayable = (organization: OrganizationData) => {
+    if (organization.outstandingAmount > 0) {
+      return true;
+    }
+
     const summary = organization.paymentSummary;
     if (summary) {
       return summary.unpaid > 0 || summary.rejected > 0;
@@ -89,14 +97,24 @@ export default function OrganizationSelectionPage({
     setSelectedOrg(orgId);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isAdvancing) return;
+
     if (!hasPayableOrganizations) {
       onBack();
       return;
     }
 
-    if (selectedOrg) {
-      onNext(selectedOrg);
+    if (!selectedOrg) return;
+
+    // Awaited even though the parent is currently synchronous: if it ever
+    // starts fetching before advancing, the button reports it instead of
+    // going dead. A synchronous handler resolves immediately and shows nothing.
+    setIsAdvancing(true);
+    try {
+      await onNext(selectedOrg);
+    } finally {
+      setIsAdvancing(false);
     }
   };
 
@@ -126,7 +144,7 @@ export default function OrganizationSelectionPage({
 
         {/* Term & Student Info Banner Card */}
         <Card className="border-border bg-primary/5 shadow-soft">
-          <CardContent className="px-6 py-4 space-y-4">
+          <CardContent className="px-4 sm:px-6 py-4 space-y-4">
             {/* Term Row */}
             {selectedTerm && (
               <>
@@ -175,7 +193,7 @@ export default function OrganizationSelectionPage({
               Choose the organization you want to pay fees or fines for
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-6 pt-4">
+          <CardContent className="px-4 sm:px-6 pt-4">
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -207,16 +225,35 @@ export default function OrganizationSelectionPage({
                             : "border-border bg-white/50"
                         }`}
                       >
-                        <div className="flex items-start gap-4 flex-1 min-w-0">
-                          <div className="p-3 rounded-xl bg-primary/10 mt-1 shrink-0">
-                            <Building2 className="h-5 w-5 text-primary" />
-                          </div>
+                        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                          {/* The org's own logo when it has one, falling back
+                              to the generic icon. A plain <img> rather than
+                              next/image because these are remote Storage URLs
+                              and no remotePatterns are configured — the same
+                              approach the super-admin app uses. */}
+                          {org.orgLogoUrl && !failedLogos.has(org.id) ? (
+                            <div className="h-11 w-11 mt-1 shrink-0 overflow-hidden rounded-xl border border-border/50 bg-white">
+                              <img
+                                src={org.orgLogoUrl}
+                                alt={`${org.acronym} logo`}
+                                loading="lazy"
+                                onError={() =>
+                                  setFailedLogos((prev) => new Set(prev).add(org.id))
+                                }
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
+                          ) : (
+                            <div className="p-3 rounded-xl bg-primary/10 mt-1 shrink-0">
+                              <Building2 className="h-5 w-5 text-primary" />
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="mb-2 flex flex-wrap items-center gap-2">
                               <h3 className="font-bold text-base text-foreground leading-tight">
                                 {org.name}
                               </h3>
-                              <Badge variant="secondary" className="text-[10px] sm:text-xs shrink-0 rounded-full font-bold uppercase">
+                              <Badge variant="secondary" className="text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase">
                                 {org.acronym}
                               </Badge>
                               {(() => {
@@ -235,7 +272,7 @@ export default function OrganizationSelectionPage({
                                     <Badge
                                       key={status}
                                       variant="outline"
-                                      className={`text-[10px] sm:text-xs shrink-0 rounded-full font-bold uppercase ${badge.className}`}
+                                      className={`text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase ${badge.className}`}
                                     >
                                       {badge.label}
                                     </Badge>
@@ -291,11 +328,20 @@ export default function OrganizationSelectionPage({
         <div className="flex justify-end">
           <Button
             onClick={handleContinue}
-            disabled={isLoading || organizations.length === 0 || (hasPayableOrganizations && !selectedOrg)}
+            disabled={isLoading || isAdvancing || organizations.length === 0 || (hasPayableOrganizations && !selectedOrg)}
             className="w-full min-[400px]:w-auto gap-2"
           >
-            {hasPayableOrganizations ? "Continue to Payment Selection" : "Exit"}
-            <ChevronRight className="h-4 w-4" />
+            {isAdvancing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading…
+              </>
+            ) : (
+              <>
+                {hasPayableOrganizations ? "Continue to Payment Selection" : "Exit"}
+                <ChevronRight className="h-4 w-4" />
+              </>
+            )}
           </Button>
         </div>
       </div>

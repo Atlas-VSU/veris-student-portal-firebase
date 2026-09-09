@@ -141,6 +141,10 @@ export default function FinesPaymentFormPage({
       imageUrl = uploadResult.url as string;
     }
 
+    // No hard-coded academic year here. The term decides which clearance
+    // document the payment lands in, so guessing it files the payment against
+    // a term the student never selected — and the guess used to differ from the
+    // API's own default, producing two different clearance ids for one blank.
     const unpaidDues = [
       ...(selectedPaymentItems?.fees ?? []).map(fee => ({
         refId: fee.id,
@@ -148,8 +152,8 @@ export default function FinesPaymentFormPage({
         amount: fee.amount,
         paymentType: "fees",
         parentFineId: "",
-        academicYear: fee.academicYear || selectedTerm?.AY || "2026-2027",
-        semester: fee.semester || selectedTerm?.semester || "1st",
+        academicYear: fee.academicYear || selectedTerm?.AY || "",
+        semester: fee.semester || selectedTerm?.semester || "",
       })),
       ...(selectedFineItems.filter(f => !f.isPaid && !f.isPending) ?? []).map(fine => ({
         refId: fine.refId,
@@ -157,10 +161,19 @@ export default function FinesPaymentFormPage({
         amount: fine.amount,
         paymentType: "fines",
         parentFineId: fine.parentFineId,
-        academicYear: fine.academicYear || selectedTerm?.AY || "2026-2027",
-        semester: fine.semester || selectedTerm?.semester || "1st",
+        academicYear: fine.academicYear || selectedTerm?.AY || "",
+        semester: fine.semester || selectedTerm?.semester || "",
       })),
     ];
+
+    // The API rejects a blank term rather than defaulting it, so fail here with
+    // something the student can act on instead of surfacing a validation error.
+    if (unpaidDues.some((due) => !due.academicYear || !due.semester)) {
+      const msg =
+        "Could not determine the academic term for these dues. Go back and re-select the term.";
+      setSubmitError(msg);
+      throw new Error(msg);
+    }
 
     let referenceId = "bulk_transaction";
     if (selectedPaymentItems?.fees.length === 1 && selectedFineItems.length === 0) {
@@ -314,6 +327,7 @@ export default function FinesPaymentFormPage({
     const currentDraft = window.sessionStorage.getItem(draftStorageKey);
     const parsedDraft = currentDraft ? (JSON.parse(currentDraft) as PaymentDraft) : { form: {} };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     persistDraft({
       ...parsedDraft,
       image: image
@@ -612,7 +626,7 @@ export default function FinesPaymentFormPage({
                     <div className="space-y-2 bg-white/50 border border-border/30 rounded-2xl p-4 shadow-soft">
                       <p className="text-xs font-bold text-primary uppercase tracking-wider">Option 1: Scan QR Code</p>
                       <ol className="space-y-1.5 pl-5 list-decimal text-xs text-muted-foreground font-medium">
-                        <li>Open GCash app and tap "Scan QR"</li>
+                        <li>Open GCash app and tap &quot;Scan QR&quot;</li>
                         <li>Scan the QR code above</li>
                         <li>Verify the account name: <span className="font-bold text-foreground">{treasurerName}</span></li>
                         <li>Enter the amount: <span className="font-bold text-foreground">₱{mobileTotal}</span></li>
@@ -625,7 +639,7 @@ export default function FinesPaymentFormPage({
                     <div className="space-y-2 bg-white/50 border border-border/30 rounded-2xl p-4 shadow-soft">
                       <p className="text-xs font-bold text-primary uppercase tracking-wider">Option 2: Send Money</p>
                       <ol className="space-y-1.5 pl-5 list-decimal text-xs text-muted-foreground font-medium">
-                        <li>Open GCash app and tap "Send Money"</li>
+                        <li>Open GCash app and tap &quot;Send Money&quot;</li>
                         <li>Enter GCash number: <span className="font-bold text-foreground">{treasurerNumber}</span></li>
                         <li>Verify account name: <span className="font-bold text-foreground">{treasurerName}</span></li>
                         <li>Enter amount: <span className="font-bold text-foreground">₱{mobileTotal}</span></li>
@@ -639,7 +653,6 @@ export default function FinesPaymentFormPage({
                   {/* Important Reminder */}
                   <div className="w-full bg-secondary/5 border border-secondary/20 rounded-[1.5rem] p-4 shadow-soft">
                     <p className="text-xs flex items-start gap-2.5 font-medium leading-relaxed">
-                      <span className="text-secondary">📱</span>
                       <span className="text-muted-foreground">
                         <span className="font-bold text-secondary">Important:</span>{' '}
                         Save your GCash reference number. Take a screenshot of the confirmation page and send it to our support for faster verification.
@@ -734,7 +747,7 @@ export default function FinesPaymentFormPage({
 
           {/* Bottom Floating Bar */}
           <div
-            className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-6 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-float"
+            className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-float"
             style={{ bottom: keyboardOffset > 0 ? `${keyboardOffset}px` : 0 }}
           >
             <div className="mx-auto max-w-2xl">
@@ -748,7 +761,7 @@ export default function FinesPaymentFormPage({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground font-medium">Total Amount</p>
                     {isContextualFlow && (
-                      <p className="text-[10px] text-muted-foreground font-medium">Includes {feeCount} fees + {fineCount} fines</p>
+                      <p className="text-[11px] text-muted-foreground font-medium">Includes {feeCount} fees + {fineCount} fines</p>
                     )}
                     <p className="text-2xl font-bold font-serif text-primary">₱{mobileTotal.toFixed(2)}</p>
                   </div>
@@ -773,7 +786,7 @@ export default function FinesPaymentFormPage({
 function FieldError({ message }: { message: string }) {
   return (
     <p className="text-xs text-destructive flex items-center gap-1.5 mt-1.5 font-bold">
-      <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white leading-none">!</span>
+      <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[11px] font-bold text-white leading-none">!</span>
       {message}
     </p>
   );
@@ -790,7 +803,7 @@ function SectionHeading({
 }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-soft">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-soft">
         {number}
       </span>
       <p className="text-sm font-bold text-foreground">

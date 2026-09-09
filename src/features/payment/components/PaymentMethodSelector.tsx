@@ -36,13 +36,13 @@ export function PaymentMethodSelector({ value, error, onSelect }: PaymentMethodS
             )}>
               {method.label}
             </span>
-            <span className="text-[10px] text-muted-foreground">{method.description}</span>
+            <span className="text-[11px] text-muted-foreground">{method.description}</span>
           </button>
         ))}
       </div>
       {error && (
         <p className="text-xs text-destructive flex items-center gap-1.5 mt-0.5">
-          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white font-mono">!</span>
+          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-[11px] font-bold text-white font-mono">!</span>
           {error}
         </p>
       )}

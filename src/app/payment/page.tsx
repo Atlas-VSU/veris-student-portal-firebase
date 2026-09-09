@@ -81,6 +81,7 @@ export default function PaymentPage() {
           id: org.id,
           name: org.name,
           acronym: org.acronym,
+          orgLogoUrl: org.orgLogoUrl ?? null,
           outstandingAmount: Number(org.outstandingAmount ?? 0),
           paymentSummary: org.paymentSummary ?? { pending: 0, verified: 0, rejected: 0, unpaid: 0 },
           feeAmount: Number(org.feeAmount ?? 0),
@@ -146,8 +147,11 @@ export default function PaymentPage() {
     setCurrentStep("fees");
   };
 
-  const handleBackToOrganization = () => {
+  const handleBackToOrganization = async () => {
     setCurrentStep("organization");
+    if (studentData && selectedTerm) {
+      await loadStudentDues(studentData.studentId, selectedTerm.AY, selectedTerm.semester);
+    }
   };
 
   const handleFeesSelected = (items: SelectedPaymentItems) => {
@@ -155,8 +159,11 @@ export default function PaymentPage() {
     setCurrentStep("payment");
   };
 
-  const handleBackToFees = () => {
+  const handleBackToFees = async () => {
     setCurrentStep("fees");
+    if (studentData && selectedTerm) {
+      await loadStudentDues(studentData.studentId, selectedTerm.AY, selectedTerm.semester);
+    }
   };
 
   return (
@@ -182,6 +189,7 @@ export default function PaymentPage() {
             id: org.id,
             name: org.name,
             acronym: org.acronym,
+            orgLogoUrl: org.orgLogoUrl ?? null,
             outstandingAmount: org.outstandingAmount,
             statusStates: getOrganizationStatusStates(org),
             paymentSummary: org.paymentSummary,
@@ -202,6 +210,7 @@ export default function PaymentPage() {
           fees={selectedOrganization.fees}
           fines={selectedOrganization.fines}
           fineItems={selectedOrganization.fineItems}
+          isLoading={isLoadingDues}
           onBack={handleBackToOrganization}
           onNext={handleFeesSelected}
         />

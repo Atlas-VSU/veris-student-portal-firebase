@@ -148,6 +148,7 @@ export default function StudentVerificationPage({ onVerified, currentStep }: Stu
       program: result.student.program?.name || PROGRAM_NAMES[data.program] || data.program,
       programShortName: result.student.program?.shortName || null,
       programAcronym: result.student.program?.acronym || null,
+      isArchived: result.student.isArchived === true,
     };
   };
 
@@ -198,7 +199,7 @@ export default function StudentVerificationPage({ onVerified, currentStep }: Stu
         </div>
         
         <Card className="w-full bg-card border border-border/50 p-0 shadow-soft">
-          <CardContent className="px-6 py-8">
+          <CardContent className="px-4 sm:px-6 py-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               {/* Student ID Input */}
               <div className="space-y-2">
