@@ -49,6 +49,15 @@ const submitPaymentSchema = z.object({
       });
     }
   }
+  if (values.paymentMethod === "bank_transfer") {
+    if (!values.referenceNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["referenceNumber"],
+        message: "Reference number is required for bank transfer payments.",
+      });
+    }
+  }
 });
 
 export async function POST(request: NextRequest) {
