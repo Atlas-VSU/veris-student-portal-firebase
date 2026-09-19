@@ -250,6 +250,7 @@ export default function FinesPaymentFormPage({
   const bankName = organizationData?.orgBankName || "";
   const bankAccountNumber = organizationData?.orgBankAccountNumber || "";
   const bankAccountName = organizationData?.orgBankAccountName || "";
+  const bankQrUrl = organizationData?.orgBankQrUrl || "";
 
   // Compute which payment methods this org has actually configured.
   // An option is only offered if the org has the required fields on file.
@@ -730,6 +731,16 @@ export default function FinesPaymentFormPage({
                     <Landmark className="h-4 w-4 text-primary" />
                     Pay via bank transfer using InstaPay or PESONet
                   </p>
+
+
+                  {/* QR Code Section */}
+                  <div className="border border-border/50 bg-white p-3 rounded-2xl shadow-soft">
+                    <img
+                      src={organizationData?.orgBankQrUrl || "/images/public-student-payment/404-QRNOTFOUND.png"}
+                      alt={`${bankAccountName} Bank QR Ph Code`}
+                      className="max-h-72 w-auto object-contain rounded-xl"
+                    />
+                  </div>
 
                   {/* Bank Account Details */}
                   <div className="w-full bg-white/90 rounded-2xl p-5 border border-border shadow-soft">

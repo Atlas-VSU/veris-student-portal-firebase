@@ -43,6 +43,7 @@ export interface OrganizationData {
   orgBankName?: string;
   orgBankAccountNumber?: string;
   orgBankAccountName?: string;
+  orgBankQrUrl?: string;
 }
 
 /** The states the dues API reports. "verified" was missing here even though the
