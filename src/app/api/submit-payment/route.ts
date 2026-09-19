@@ -26,7 +26,7 @@ const submitPaymentSchema = z.object({
   orgId:           z.string().min(1, "Organization is required"),
   amount:          z.number().positive("Amount must be greater than zero"),
   paymentMethod:   z.enum(["gcash", "bank_transfer", "cash"]),
-  referenceNumber: z.string().optional(),
+  referenceNumber: z.string().trim().optional(),
   senderNumber:    z.string().optional(),
   imageUrl:        z.string().optional(),
   notes:           z.string().optional(),
