@@ -44,11 +44,12 @@ export function usePaymentForm(options?: UsePaymentFormOptions) {
   });
 
   const paymentMethod = form.watch("paymentMethod");
-  const needsRef = paymentMethod === "gcash";
-  const isGcash  = paymentMethod === "gcash";
+  const isGcash = paymentMethod === "gcash";
+  const isBank  = paymentMethod === "bank_transfer";
+  const needsRef = isGcash || isBank;
 
   const handleMethodSelect = (value: OnlinePaymentMethod) => {
-    form.setValue("paymentMethod", "gcash", { shouldValidate: true });
+    form.setValue("paymentMethod", value, { shouldValidate: true });
     form.setValue("referenceNumber", "");
     form.setValue("senderNumber", "");
     form.clearErrors(["referenceNumber", "senderNumber"]);
@@ -86,6 +87,7 @@ export function usePaymentForm(options?: UsePaymentFormOptions) {
     status,
     needsRef,
     isGcash,
+    isBank,
     handleMethodSelect,
     handleReset,
     onSubmit: form.handleSubmit(onSubmit),

@@ -1,21 +1,27 @@
 import { cn } from "@/lib/utils";
 import { OnlinePaymentMethod } from "../types";
 
-const PAYMENT_METHODS = [
-  { value: "gcash",         label: "GCash", icon: "📱", description: "Mobile wallet" },
+const ALL_PAYMENT_METHODS = [
+  { value: "gcash" as OnlinePaymentMethod,         label: "GCash", icon: "📱", description: "Mobile wallet" },
+  { value: "bank_transfer" as OnlinePaymentMethod, label: "Bank",  icon: "🏦", description: "Bank / InstaPay" },
 ] as const;
 
 interface PaymentMethodSelectorProps {
   value: string;
   error?: string;
   onSelect: (value: OnlinePaymentMethod) => void;
+  /** Pass a filtered subset when only certain methods are available for this org.
+   *  Falls back to all methods when omitted. */
+  methods?: Array<{ value: OnlinePaymentMethod; label: string; icon: string; description: string }>;
 }
 
-export function PaymentMethodSelector({ value, error, onSelect }: PaymentMethodSelectorProps) {
+export function PaymentMethodSelector({ value, error, onSelect, methods }: PaymentMethodSelectorProps) {
+  const displayMethods = methods ?? ALL_PAYMENT_METHODS;
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-3">
-        {PAYMENT_METHODS.map(method => (
+        {displayMethods.map(method => (
           <button
             key={method.value}
             type="button"
