@@ -3,6 +3,7 @@ import { z } from "zod";
 import { adminDb } from "@/firebase/firebase-admin.config";
 import { FieldValue } from "firebase-admin/firestore";
 import { FieldPath } from "firebase-admin/firestore";
+import { availableOnlinePaymentMethods, configuredPaymentDetail } from "@/features/payment/payment-methods";
 
 const unpaidDueSchema = z.object({
   refId:        z.string().min(1),
@@ -123,6 +124,35 @@ export async function POST(request: NextRequest) {
 
     const userId = userDoc.id;
 
+    // The client filters methods for display, but a saved draft or a direct
+    // request must also be checked against the current organization settings.
+    const orgData = payload.paymentMethod === "cash"
+      ? undefined
+      : (await adminDb.collection("organizations").doc(payload.orgId).get()).data();
+
+    if (
+      payload.paymentMethod !== "cash" &&
+      !availableOnlinePaymentMethods(orgData).includes(payload.paymentMethod)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This payment method is not currently available for the organization. Refresh the page and choose an available method.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Keep the bank destination configured at submission time on the payment.
+    // Later edits to the organization must not erase this historical detail.
+    const bankDestination = payload.paymentMethod === "bank_transfer"
+      ? {
+          orgBankName: configuredPaymentDetail(orgData?.orgBankName),
+          orgBankAccountNumber: configuredPaymentDetail(orgData?.orgBankAccountNumber),
+          orgBankAccountName: configuredPaymentDetail(orgData?.orgBankAccountName),
+        }
+      : {};
+
     const feeIds = payload.dues.filter(d => d.paymentType === "fees").map(d => d.refId);
     const fineItemIds = payload.dues.filter(d => d.paymentType === "fines").map(d => d.refId);
 
@@ -174,7 +204,9 @@ export async function POST(request: NextRequest) {
         paymentProofId:  proofRef.id,
         paymentType:     due.paymentType,
         gcashReference:  payload.referenceNumber ?? null,
+        referenceNumber: payload.referenceNumber ?? "",
         senderNumber:    payload.senderNumber    ?? "",
+        ...bankDestination,
         imageUrl:        payload.imageUrl        ?? "",
         status:          "pending",
         paidAt:          now,
@@ -248,6 +280,7 @@ export async function POST(request: NextRequest) {
       referenceId:     payload.referenceId,
       referenceNumber: payload.referenceNumber ?? "",
       senderNumber:    payload.senderNumber    ?? "",
+      ...bankDestination,
       amount:          payload.amount,
       isArchived:      false,
       imageUrl:        payload.imageUrl        ?? "",

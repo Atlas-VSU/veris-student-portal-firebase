@@ -20,6 +20,7 @@ import { SelectedPaymentItems, StudentData, TermData, OrganizationData } from ".
 import { PaymentBrandHeader } from "./components/PaymentBrandHeader";
 import { PaymentProgressBar } from "./components/PaymentProgressBar";
 import { PaymentMethodSelector } from "./components/PaymentMethodSelector";
+import { availableOnlinePaymentMethods, configuredPaymentDetail } from "./payment-methods";
 
 interface FinesPaymentFormPageProps {
   studentData?: StudentData;
@@ -243,23 +244,24 @@ export default function FinesPaymentFormPage({
   const fineCount = selectedFineItems.length ?? 0;
 
   const treasurerName = organizationData?.orgTreasurerName || "";
-  const treasurerNumber = organizationData?.orgTreasurerNumber || "";
+  const treasurerNumber = configuredPaymentDetail(organizationData?.orgTreasurerNumber);
   const auditorName = organizationData?.orgAuditorName || "";
   const auditorNumber = organizationData?.orgAuditorNumber || "";
 
-  const bankName = organizationData?.orgBankName || "";
-  const bankAccountNumber = organizationData?.orgBankAccountNumber || "";
-  const bankAccountName = organizationData?.orgBankAccountName || "";
-  const bankQrUrl = organizationData?.orgBankQrUrl || "";
+  const bankName = configuredPaymentDetail(organizationData?.orgBankName);
+  const bankAccountNumber = configuredPaymentDetail(organizationData?.orgBankAccountNumber);
+  const bankAccountName = configuredPaymentDetail(organizationData?.orgBankAccountName);
+  const bankQrUrl = configuredPaymentDetail(organizationData?.orgBankQrUrl);
 
   // Compute which payment methods this org has actually configured.
   // An option is only offered if the org has the required fields on file.
   const availablePaymentMethods = useMemo(() => {
     const methods: Array<{ value: "gcash" | "bank_transfer"; label: string; icon: string; description: string }> = [];
-    if (organizationData?.orgTreasurerNumber) {
+    const available = availableOnlinePaymentMethods(organizationData);
+    if (available.includes("gcash")) {
       methods.push({ value: "gcash",         label: "GCash", icon: "📱", description: "Mobile wallet" });
     }
-    if (organizationData?.orgBankAccountNumber) {
+    if (available.includes("bank_transfer")) {
       methods.push({ value: "bank_transfer", label: "Bank",  icon: "🏦", description: "Bank / InstaPay" });
     }
     return methods;
@@ -309,15 +311,17 @@ export default function FinesPaymentFormPage({
     };
   }, [draftStorageKey, form, selectedPaymentItems?.totalAmount, selectedTypes, setImage, studentData?.name, studentData?.studentId]);
 
-  // Auto-select the only available method so the form value is always in sync
-  // with what the student can actually use. Runs after draft restoration to
-  // avoid overwriting a saved draft unnecessarily.
+  // Keep the selected method aligned with the current org configuration after
+  // restoring a draft. Old reference details cannot carry over to a new method.
   useEffect(() => {
     if (!draftRestored || availablePaymentMethods.length === 0) return;
     const current = form.getValues("paymentMethod");
     const isCurrentAvailable = availablePaymentMethods.some(m => m.value === current);
     if (!isCurrentAvailable) {
       form.setValue("paymentMethod", availablePaymentMethods[0].value, { shouldValidate: false });
+      form.setValue("referenceNumber", "");
+      form.setValue("senderNumber", "");
+      form.clearErrors(["referenceNumber", "senderNumber"]);
     }
   }, [draftRestored, availablePaymentMethods, form]);
 
@@ -400,6 +404,10 @@ export default function FinesPaymentFormPage({
     handleReset();
     onRestart?.();
   };
+
+  const selectedMethodAvailable = availablePaymentMethods.some(
+    (method) => method.value === watch("paymentMethod")
+  );
 
   if (status === "success") {
     return (
@@ -564,7 +572,7 @@ export default function FinesPaymentFormPage({
             )}
 
             {/* ── GCash instructions ── (unchanged, shown only when gcash is selected) */}
-            {isGcash && (
+            {selectedMethodAvailable && isGcash && (
               <Card className="mt-4 border border-secondary/20 bg-secondary/5 shadow-soft">
                 <CardContent className="pt-6 flex flex-col items-center gap-6">
                   <p className="text-xs text-muted-foreground self-start flex items-center gap-1.5 font-medium">
@@ -724,7 +732,7 @@ export default function FinesPaymentFormPage({
             )}
 
             {/* ── Bank Transfer instructions ── (shown only when bank_transfer is selected) */}
-            {isBank && (
+            {selectedMethodAvailable && isBank && (
               <Card className="mt-4 border border-primary/20 bg-primary/5 shadow-soft">
                 <CardContent className="pt-6 flex flex-col items-center gap-6">
                   <p className="text-xs text-muted-foreground self-start flex items-center gap-1.5 font-medium">
@@ -734,13 +742,15 @@ export default function FinesPaymentFormPage({
 
 
                   {/* QR Code Section */}
-                  <div className="border border-border/50 bg-white p-3 rounded-2xl shadow-soft">
-                    <img
-                      src={organizationData?.orgBankQrUrl || "/images/public-student-payment/404-QRNOTFOUND.png"}
-                      alt={`${bankAccountName} Bank QR Ph Code`}
-                      className="max-h-72 w-auto object-contain rounded-xl"
-                    />
-                  </div>
+                  {bankQrUrl && (
+                    <div className="border border-border/50 bg-white p-3 rounded-2xl shadow-soft">
+                      <img
+                        src={bankQrUrl}
+                        alt={`${bankAccountName} Bank QR Ph Code`}
+                        className="max-h-72 w-auto object-contain rounded-xl"
+                      />
+                    </div>
+                  )}
 
                   {/* Bank Account Details */}
                   <div className="w-full bg-white/90 rounded-2xl p-5 border border-border shadow-soft">
@@ -823,7 +833,7 @@ export default function FinesPaymentFormPage({
               </Card>
             )}
 
-            <Card className="border border-border/50 bg-card shadow-soft mt-4">
+            {availablePaymentMethods.length > 0 && <Card className="border border-border/50 bg-card shadow-soft mt-4">
               <CardContent className="pt-6 flex flex-col gap-4">
                 <input type="hidden" {...register("amount", { valueAsNumber: true })} />
                 <div className="rounded-xl border border-border bg-primary/5 px-4 py-3">
@@ -835,7 +845,7 @@ export default function FinesPaymentFormPage({
                 <Separator className="bg-border/50" />
 
                 <input type="hidden" {...register("paymentMethod")} />
-                {needsRef && (
+                {selectedMethodAvailable && needsRef && (
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mt-2">
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="referenceNumber" className="text-foreground font-bold text-sm">Reference Number <span className="text-primary">*</span></Label>
@@ -858,12 +868,12 @@ export default function FinesPaymentFormPage({
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card>}
 
           </div>
 
           {/* Section 3 — Upload Receipt */}
-          <div>
+          {availablePaymentMethods.length > 0 && <div>
             <SectionHeading number={3} title="Upload Receipt" />
             <Card className="border border-border/50 bg-card shadow-soft">
               <CardContent className="pt-6">
@@ -880,17 +890,17 @@ export default function FinesPaymentFormPage({
                 {receiptError && <FieldError message={receiptError} />}
               </CardContent>
             </Card>
-          </div>
+          </div>}
 
           {/* Section 4 — Notes */}
-          <div>
+          {availablePaymentMethods.length > 0 && <div>
             <SectionHeading number={4} title="Notes" optional />
             <Card className="border border-border/50 bg-card shadow-soft">
               <CardContent className="pt-6">
                 <Textarea id="notes" placeholder="Any additional notes or remarks..." {...register("notes")} rows={3} className="rounded-2xl border-border bg-white/50 focus-visible:ring-primary/30 p-4" />
               </CardContent>
             </Card>
-          </div>
+          </div>}
 
           {submitError && (
             <Alert variant="destructive" className="rounded-2xl border border-destructive/20 bg-destructive/10">
@@ -900,7 +910,7 @@ export default function FinesPaymentFormPage({
           )}
 
           {/* Bottom Floating Bar */}
-          <div
+          {availablePaymentMethods.length > 0 && <div
             className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-float"
             style={{ bottom: keyboardOffset > 0 ? `${keyboardOffset}px` : 0 }}
           >
@@ -921,7 +931,7 @@ export default function FinesPaymentFormPage({
                   </div>
                   <Button
                     type="submit"
-                    disabled={!image?.file}
+                    disabled={!image?.file || !selectedMethodAvailable}
                     className="px-8"
                   >
                     Submit Payment
@@ -929,7 +939,7 @@ export default function FinesPaymentFormPage({
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
         </form>
       </div>
