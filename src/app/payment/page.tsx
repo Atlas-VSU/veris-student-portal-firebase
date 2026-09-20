@@ -95,6 +95,10 @@ export default function PaymentPage() {
           orgAuditorName: org.orgAuditorName,
           orgAuditorUrl: org.orgAuditorUrl,
           orgAuditorNumber: org.orgAuditorNumber,
+          orgBankName: org.orgBankName,
+          orgBankAccountNumber: org.orgBankAccountNumber,
+          orgBankAccountName: org.orgBankAccountName,
+          orgBankQrUrl: org.orgBankQrUrl,
         }))
       );
     } catch (error) {
