@@ -87,7 +87,7 @@ export const paymentSchema = z.object({
     ),
   amount: z.number().min(0.01, "Amount must be greater than zero"),
   paymentMethod: z.enum(PaymentMethods),
-  referenceNumber: z.string().optional(),
+  referenceNumber: z.string().trim().optional(),
   senderNumber: z.string().optional(),
   imageUrl: z.string().optional(),
   rejectionReason: z.string().optional(),

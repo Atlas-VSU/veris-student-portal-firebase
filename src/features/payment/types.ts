@@ -38,6 +38,12 @@ export interface OrganizationData {
   orgAuditorName?: string;
   orgAuditorUrl?: string;
   orgAuditorNumber?: string;
+
+  // Bank transfer details — populated by admin; absence means bank option is unavailable
+  orgBankName?: string;
+  orgBankAccountNumber?: string;
+  orgBankAccountName?: string;
+  orgBankQrUrl?: string;
 }
 
 /** The states the dues API reports. "verified" was missing here even though the
@@ -95,4 +101,4 @@ export interface SelectedPaymentItems {
   totalAmount: number;
 }
 
-export type OnlinePaymentMethod = "gcash";
+export type OnlinePaymentMethod = "gcash" | "bank_transfer";
