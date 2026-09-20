@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, AlertCircle, ArrowLeft, BookOpen, Building2, CheckCircle, Copy, CreditCard, Info, Landmark, Loader2, Phone, Receipt, ShieldAlert, User, UserCircle } from "lucide-react";
+import { CalendarDays, AlertCircle, ArrowLeft, BookOpen, Building2, CheckCircle, Copy, CreditCard, Info, Landmark, Loader2, Phone, Receipt, ShieldAlert, Smartphone, User, UserCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { ImageUpload } from "./components/ImageUpload";
 import { SelectedPaymentItems, StudentData, TermData, OrganizationData } from "./types";
 import { PaymentBrandHeader } from "./components/PaymentBrandHeader";
 import { PaymentProgressBar } from "./components/PaymentProgressBar";
-import { PaymentMethodSelector } from "./components/PaymentMethodSelector";
+import { PaymentMethodSelector, type PaymentMethodOption } from "./components/PaymentMethodSelector";
 import { availableOnlinePaymentMethods, configuredPaymentDetail } from "./payment-methods";
 
 interface FinesPaymentFormPageProps {
@@ -256,13 +256,13 @@ export default function FinesPaymentFormPage({
   // Compute which payment methods this org has actually configured.
   // An option is only offered if the org has the required fields on file.
   const availablePaymentMethods = useMemo(() => {
-    const methods: Array<{ value: "gcash" | "bank_transfer"; label: string; icon: string; description: string }> = [];
+    const methods: PaymentMethodOption[] = [];
     const available = availableOnlinePaymentMethods(organizationData);
     if (available.includes("gcash")) {
-      methods.push({ value: "gcash",         label: "GCash", icon: "📱", description: "Mobile wallet" });
+      methods.push({ value: "gcash",         label: "GCash", icon: Smartphone, description: "Mobile wallet" });
     }
     if (available.includes("bank_transfer")) {
-      methods.push({ value: "bank_transfer", label: "Bank",  icon: "🏦", description: "Bank / InstaPay" });
+      methods.push({ value: "bank_transfer", label: "Bank",  icon: Landmark,   description: "Bank / InstaPay" });
     }
     return methods;
   }, [organizationData]);

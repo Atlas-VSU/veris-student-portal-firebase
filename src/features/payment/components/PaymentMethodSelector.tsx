@@ -1,10 +1,18 @@
+import { Landmark, Smartphone, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OnlinePaymentMethod } from "../types";
 
-const ALL_PAYMENT_METHODS = [
-  { value: "gcash" as OnlinePaymentMethod,         label: "GCash", icon: "📱", description: "Mobile wallet" },
-  { value: "bank_transfer" as OnlinePaymentMethod, label: "Bank",  icon: "🏦", description: "Bank / InstaPay" },
-] as const;
+export interface PaymentMethodOption {
+  value: OnlinePaymentMethod;
+  label: string;
+  icon: LucideIcon;
+  description: string;
+}
+
+const ALL_PAYMENT_METHODS: readonly PaymentMethodOption[] = [
+  { value: "gcash",         label: "GCash", icon: Smartphone, description: "Mobile wallet" },
+  { value: "bank_transfer", label: "Bank",  icon: Landmark,   description: "Bank / InstaPay" },
+];
 
 interface PaymentMethodSelectorProps {
   value: string;
@@ -12,7 +20,7 @@ interface PaymentMethodSelectorProps {
   onSelect: (value: OnlinePaymentMethod) => void;
   /** Pass a filtered subset when only certain methods are available for this org.
    *  Falls back to all methods when omitted. */
-  methods?: Array<{ value: OnlinePaymentMethod; label: string; icon: string; description: string }>;
+  methods?: readonly PaymentMethodOption[];
 }
 
 export function PaymentMethodSelector({ value, error, onSelect, methods }: PaymentMethodSelectorProps) {
@@ -21,30 +29,38 @@ export function PaymentMethodSelector({ value, error, onSelect, methods }: Payme
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-3">
-        {displayMethods.map(method => (
-          <button
-            key={method.value}
-            type="button"
-            onClick={() => onSelect(method.value)}
-            className={cn(
-              "flex flex-1 flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-3 text-center transition-all cursor-pointer",
-              value === method.value
-                ? "border-green-500 bg-green-50"
-                : "border-border bg-card hover:border-green-300 hover:bg-green-50/50"
-            )}
-          >
-            <span className="text-xl">{method.icon}</span>
-            <span className={cn(
-              "text-xs font-700",
-              value === method.value
-                ? "text-green-700 font-bold"
-                : "text-foreground font-semibold"
-            )}>
-              {method.label}
-            </span>
-            <span className="text-[11px] text-muted-foreground">{method.description}</span>
-          </button>
-        ))}
+        {displayMethods.map(method => {
+          const Icon = method.icon;
+          const isSelected = value === method.value;
+
+          return (
+            <button
+              key={method.value}
+              type="button"
+              onClick={() => onSelect(method.value)}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-1.5 rounded-lg border-2 px-3 py-3 text-center transition-all cursor-pointer",
+                isSelected
+                  ? "border-green-500 bg-green-50"
+                  : "border-border bg-card hover:border-green-300 hover:bg-green-50/50"
+              )}
+            >
+              <Icon
+                className={cn("h-5 w-5", isSelected ? "text-green-600" : "text-muted-foreground")}
+                aria-hidden="true"
+              />
+              <span className={cn(
+                "text-xs font-700",
+                isSelected
+                  ? "text-green-700 font-bold"
+                  : "text-foreground font-semibold"
+              )}>
+                {method.label}
+              </span>
+              <span className="text-[11px] text-muted-foreground">{method.description}</span>
+            </button>
+          );
+        })}
       </div>
       {error && (
         <p className="text-xs text-destructive flex items-center gap-1.5 mt-0.5">
