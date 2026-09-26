@@ -42,3 +42,4 @@ next-env.d.ts
 
 # unoffical docs
 .docs/
+/docs
