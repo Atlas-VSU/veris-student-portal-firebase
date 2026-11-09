@@ -57,6 +57,9 @@ export async function GET(request: NextRequest) {
       for (const itemsSnap of fineItemLookups) {
         for (const itemDoc of itemsSnap.docs) {
           const data = itemDoc.data();
+          if (data.isArchived === true || data.metadata?.isArchived === true) {
+            continue;
+          }
           recordTermKeys.add(termKey(data.academicYear, data.semester));
         }
       }
