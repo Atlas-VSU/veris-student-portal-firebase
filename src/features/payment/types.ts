@@ -71,6 +71,7 @@ export interface FineItem {
   isPaid: boolean;
   isPending: boolean;
   isWaived?: boolean;
+  isArchived?: boolean;
   date: any; // Timestamp or string
   academicYear?: string;
   semester?: string;

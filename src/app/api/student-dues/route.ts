@@ -27,6 +27,7 @@ type FineRecord = {
   dueDate?: { toDate?: () => Date } | Date | string | null;
   lastFineIssuedAt?: { toDate?: () => Date } | Date | string | null;
   status?: string;
+  isArchived?: boolean;
   metadata?: {
     isArchived?: boolean;
   };
@@ -422,7 +423,7 @@ export async function GET(request: NextRequest) {
     for (const doc of finesSnapshot.docs) {
       const fine = { id: doc.id, ...doc.data() } as FineRecord;
       if (!fine.orgId) continue;
-      if (fine.metadata?.isArchived) continue;
+      if (fine.isArchived || fine.metadata?.isArchived) continue;
 
       let fineItemsQuery: FirebaseFirestore.Query = adminDb
         .collection("fines")
@@ -459,6 +460,9 @@ export async function GET(request: NextRequest) {
       const items = [];
       for (const itemDoc of fineItemsSnapshot.docs) {
         const fineItem = { id: itemDoc.id, ...itemDoc.data() } as FineItem;
+        if (fineItem.isArchived === true || fineItem.metadata?.isArchived === true) {
+          continue;
+        }
 
         const settled = fineItem.isPaid === true || fineItem.isWaived === true;
         const pending = !settled && fineItem.isPending === true;
@@ -514,7 +518,7 @@ export async function GET(request: NextRequest) {
 
       const isPayable = payableItems.length > 0;
 
-      if (AY && semester && fineItemsSnapshot.empty) continue;
+      if (items.length === 0) continue;
 
       const existing = grouped.get(fine.orgId) ?? {
         orgId: fine.orgId,
