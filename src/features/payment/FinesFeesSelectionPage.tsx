@@ -123,11 +123,15 @@ export default function FinesFeesSelectionPage({
   // Filtering on `!isPending` alone counted settled items as payable now that
   // the API returns them, so the student could see paid fines offered for
   // payment again.
-  const payableFineItems = useMemo(
-    () => fineItems.filter((fine) => (fine.isPayable ?? !fine.isPending) && !fine.isPaid),
+  const activeFineItems = useMemo(
+    () => fineItems.filter((fine) => !fine.isArchived),
     [fineItems]
   );
-  const pendingFines = useMemo(() => fineItems.filter((fine) => fine.isPending === true), [fineItems]);
+  const payableFineItems = useMemo(
+    () => activeFineItems.filter((fine) => (fine.isPayable ?? !fine.isPending) && !fine.isPaid),
+    [activeFineItems]
+  );
+  const pendingFines = useMemo(() => activeFineItems.filter((fine) => fine.isPending === true), [activeFineItems]);
   const payableFines = useMemo(() => payableFineItems.length > 0 ? fines : [], [fines, payableFineItems]);
 
   // The card headers show what is still OWED. They used to sum every row
@@ -514,7 +518,7 @@ export default function FinesFeesSelectionPage({
                   </div>
                   {!hasPayableFineItems && (
                     <p className="text-xs text-amber-600 px-1 font-medium">
-                      {fineItems.some(f => f.isPending)
+                      {activeFineItems.some(f => f.isPending)
                         ? "All fine items are currently pending verification or verified and cannot be selected."
                         : "All fine items are already verified and cannot be selected."}
                     </p>
@@ -526,7 +530,7 @@ export default function FinesFeesSelectionPage({
 
               {/* Fine Items Breakdown */}
               <div className="space-y-3">
-                {fineItems.map((fine) => {
+                {activeFineItems.map((fine) => {
                   const parentFine = fineById.get(fine.parentFineId);
                   // The item's own state, computed server-side from its own
                   // flags. It used to read the PARENT's rejection, so one

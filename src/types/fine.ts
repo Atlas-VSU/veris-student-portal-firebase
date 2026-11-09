@@ -17,6 +17,12 @@ export type FineItem = {
   waivedReason?: string;
   isPaid: boolean;
   isPending?: boolean;
+  isArchived?: boolean;
+  metadata?: {
+    isArchived?: boolean;
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
+  };
   academicYear?: string;
   semester?: string;
 };
