@@ -581,6 +581,7 @@ export async function GET(request: NextRequest) {
           acronym: display.acronym,
           // `orgLogoUrl` is the field all three admin apps write and read.
           orgLogoUrl: orgData?.orgLogoUrl ? String(orgData.orgLogoUrl) : null,
+          isAcceptingPayments: orgData?.isAcceptingPayments !== false,
           outstandingAmount: due.feeAmount + due.fineAmount,
           feeAmount: due.feeAmount,
           fineAmount: due.fineAmount,

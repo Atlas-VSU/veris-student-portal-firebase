@@ -126,9 +126,18 @@ export async function POST(request: NextRequest) {
 
     // The client filters methods for display, but a saved draft or a direct
     // request must also be checked against the current organization settings.
-    const orgData = payload.paymentMethod === "cash"
-      ? undefined
-      : (await adminDb.collection("organizations").doc(payload.orgId).get()).data();
+    const orgDoc = await adminDb.collection("organizations").doc(payload.orgId).get();
+    const orgData = orgDoc.data();
+
+    if (orgData?.isAcceptingPayments === false) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This organization has temporarily disabled online payment submissions.",
+        },
+        { status: 403 }
+      );
+    }
 
     if (
       payload.paymentMethod !== "cash" &&
