@@ -23,6 +23,8 @@ export interface OrganizationData {
   acronym: string;
   /** Uploaded by the org in the admin app. Null when they have not set one. */
   orgLogoUrl?: string | null;
+  /** False when the organization has temporarily paused online payments. */
+  isAcceptingPayments?: boolean;
   outstandingAmount: number;
   statusStates?: Array<"unpaid" | "pending" | "rejected" | "verified">;
   paymentSummary?: {
