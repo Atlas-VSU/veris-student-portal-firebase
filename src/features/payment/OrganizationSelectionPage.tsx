@@ -73,6 +73,10 @@ export default function OrganizationSelectionPage({
   const [isAdvancing, setIsAdvancing] = useState(false);
 
   const isOrganizationPayable = (organization: OrganizationData) => {
+    if (organization.isAcceptingPayments === false) {
+      return false;
+    }
+
     if (organization.outstandingAmount > 0) {
       return true;
     }
@@ -256,6 +260,14 @@ export default function OrganizationSelectionPage({
                               <Badge variant="secondary" className="text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase">
                                 {org.acronym}
                               </Badge>
+                              {org.isAcceptingPayments === false && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[11px] sm:text-xs shrink-0 rounded-full font-bold uppercase border-amber-300 bg-amber-50 text-amber-800"
+                                >
+                                  Payments Temporarily Closed
+                                </Badge>
+                              )}
                               {(() => {
                                 const summaryStates: Array<"unpaid" | "pending" | "rejected" | "verified" | "cleared"> = org.statusStates && org.statusStates.length > 0
                                   ? org.statusStates
@@ -304,8 +316,10 @@ export default function OrganizationSelectionPage({
                               </p>
                             )}
                             {!isPayable && (
-                              <p className="mt-2 text-xs text-muted-foreground font-medium">
-                                No payment needed for now. Current submissions are pending or already verified.
+                              <p className={`mt-2 text-xs font-medium ${org.isAcceptingPayments === false ? "text-amber-700" : "text-muted-foreground"}`}>
+                                {org.isAcceptingPayments === false
+                                  ? "Online payments are temporarily disabled by this organization. Please contact your organization or pay directly at their office."
+                                  : "No payment needed for now. Current submissions are pending or already verified."}
                               </p>
                             )}
                           </div>
