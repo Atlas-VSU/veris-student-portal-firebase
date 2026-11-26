@@ -1,17 +1,21 @@
-import { Fraunces, Nunito } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const fraunces = Fraunces({
+const fraunces = localFont({
+  src: "./fonts/Fraunces-Latin.woff2",
   variable: "--font-fraunces",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  weight: "600 800",
+  style: "normal",
+  display: "swap",
 });
 
-const nunito = Nunito({
+const nunito = localFont({
+  src: "./fonts/Nunito-Latin.woff2",
   variable: "--font-nunito",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  weight: "300 900",
+  style: "normal",
+  display: "swap",
 });
 
 export const metadata = {
