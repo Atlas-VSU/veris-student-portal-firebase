@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/firebase/firebase-admin.config";
-import { Timestamp } from "firebase-admin/firestore";
 import { FineItem } from "@/types/fine";
+import {
+  attachOrganizationReceipts,
+  FeeDueInternal,
+  FineDueInternal,
+  FineItemDueInternal,
+  getLatestVerifiedPaymentLog,
+  loadStudentReceiptContext,
+  PaymentLogForReceipt,
+  toIsoDate,
+  toMillis, 
+} from "./receipt-resolver";
 
 type FeeRecord = {
   id: string;
@@ -10,7 +20,10 @@ type FeeRecord = {
   feeType?: string;
   balance?: number;
   amount?: number;
+  paidAmount?: number;
   dueDate?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
   isArchived?: boolean;
   academicYear?: string;
   semester?: string;
@@ -26,21 +39,14 @@ type FineRecord = {
   accumulatedAmount?: number;
   dueDate?: { toDate?: () => Date } | Date | string | null;
   lastFineIssuedAt?: { toDate?: () => Date } | Date | string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
   status?: string;
   isArchived?: boolean;
   metadata?: {
     isArchived?: boolean;
-  };
-};
-
-type PaymentLogRecord = {
-  status?: string;
-  rejectionReason?: string | null;
-  paymentProofId?: string;
-  createdAt?: unknown;
-  verifiedAt?: unknown;
-  metaData?: {
     updatedAt?: unknown;
+    createdAt?: unknown;
   };
 };
 
@@ -49,72 +55,7 @@ const asNumber = (value: unknown): number => {
   return 0;
 };
 
-const toIsoDate = (value: unknown): string | undefined => {
-  if (!value) return undefined;
-
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-  }
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
-  }
-
-  if (typeof value === "object" && value && "toDate" in value) {
-    const maybeTimestamp = value as { toDate?: () => Date };
-    const date = maybeTimestamp.toDate?.();
-    if (date && !Number.isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "_seconds" in value &&
-    typeof (value as { _seconds?: unknown })._seconds === "number"
-  ) {
-    const seconds = (value as { _seconds: number })._seconds;
-    return new Date(seconds * 1000).toISOString();
-  }
-
-  return undefined;
-};
-
-const toMillis = (value: unknown): number => {
-  if (!value) return 0;
-
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? 0 : value.getTime();
-  }
-
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
-  }
-
-  if (typeof value === "object" && value && "toDate" in value) {
-    const maybeTimestamp = value as { toDate?: () => Date };
-    const date = maybeTimestamp.toDate?.();
-    return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
-  }
-
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "_seconds" in value &&
-    typeof (value as { _seconds?: unknown })._seconds === "number"
-  ) {
-    return (value as { _seconds: number })._seconds * 1000;
-  }
-
-  return 0;
-};
-
-const getLatestRejectedReason = (logs: PaymentLogRecord[]): string | undefined => {
+const getLatestRejectedReason = (logs: PaymentLogForReceipt[]): string | undefined => {
   const rejectedLogs = logs
     .filter((log) => log.status === "rejected" && typeof log.rejectionReason === "string")
     .map((log) => ({
@@ -131,18 +72,6 @@ const getLatestRejectedReason = (logs: PaymentLogRecord[]): string | undefined =
   return rejectedLogs[0]?.reason;
 };
 
-/**
- * The status vocabulary the admin apps actually write. Verified against
- * coral-ussc, veris-system-firebase and veris-v1-super-admin, which all agree:
- *
- *   fees.status            "unpaid" | "pending" | "partial" | "paid"
- *   fines.status           "unpaid" | "pending" | "partial" | "paid" | "waived"
- *   paymentHistory.status  "pending" | "verified" | "rejected"
- *
- * This previously mapped only the paymentHistory words and dropped everything
- * else to "unpaid", so a record the admin had marked "paid" or "waived" read
- * back as still owing.
- */
 const SETTLED_RECORD_STATUSES = new Set(["paid", "waived"]);
 
 const normalizePaymentState = (
@@ -155,36 +84,14 @@ const normalizePaymentState = (
   return "unpaid";
 };
 
-/**
- * What the student still owes on a record.
- *
- * `balance` is authoritative once it exists — the admin decrements it on every
- * verified payment. Falling back to `amount` whenever balance was merely zero
- * (rather than absent) reported a fully paid record as owing its full amount
- * again, so the fallback now only fires when the field is genuinely missing.
- */
-const outstandingOf = (
-  balance: unknown,
-  fallbackAmount: unknown
-): number => {
+const outstandingOf = (balance: unknown, fallbackAmount: unknown): number => {
   if (typeof balance === "number" && Number.isFinite(balance)) {
     return Math.max(0, balance);
   }
   return Math.max(0, asNumber(fallbackAmount));
 };
 
-/**
- * The refIds covered by the most recent rejected submission.
- *
- * A rejection is a property of one submission, not of the parent fine: the
- * admin clears `isPending` on exactly the items it covered and leaves the rest
- * untouched. The paymentHistory log does not record which items it carried,
- * but it does carry `paymentProofId`, and the proof stores `metadata.items` —
- * so one extra read per rejected fine recovers the attribution. Without it,
- * every unpaid item under the fine inherits the rejection, including items
- * raised after it that were never submitted.
- */
-const getRejectedRefIds = async (logs: PaymentLogRecord[]): Promise<Set<string>> => {
+const getRejectedRefIds = async (logs: PaymentLogForReceipt[]): Promise<Set<string>> => {
   const latestRejected = logs
     .filter((log) => log.status === "rejected" && typeof log.paymentProofId === "string")
     .sort(
@@ -212,14 +119,12 @@ const getRejectedRefIds = async (logs: PaymentLogRecord[]): Promise<Set<string>>
         .map((item) => item.refId as string)
     );
   } catch {
-    // A missing or unreadable proof must not fail the dues listing — it only
-    // costs per-item rejection attribution, which the group-level reason covers.
     return new Set();
   }
 };
 
 const getLatestPaymentHistoryState = (
-  logs: PaymentLogRecord[]
+  logs: PaymentLogForReceipt[]
 ): "pending" | "verified" | "rejected" | undefined => {
   const latest = logs
     .map((log) => ({
@@ -281,10 +186,13 @@ export async function GET(request: NextRequest) {
         .where("semester", "==", semester);
     }
 
-    const [feesSnapshot, finesSnapshot] = await Promise.all([
+    const [feesSnapshot, finesSnapshot, receiptContext] = await Promise.all([
       feesQuery.get(),
       finesQuery.get(),
+      loadStudentReceiptContext(studentId),
     ]);
+
+    const { resolvedStudentName, verifiedProofsById, ensureProofLoaded } = receiptContext;
 
     const grouped = new Map<
       string,
@@ -298,44 +206,9 @@ export async function GET(request: NextRequest) {
           rejected: number;
           unpaid: number;
         };
-        fees: Array<{
-          id: string;
-          description: string;
-          amount: number;
-          dueDate?: string;
-          latestRejectionReason?: string;
-          isPayable: boolean;
-          academicYear: string;
-          semester: string;
-          paymentState: "unpaid" | "pending" | "rejected" | "verified";
-        }>;
-        fines: Array<{
-          id: string;
-          description: string;
-          amount: number;
-          date?: string;
-          reason: string;
-          latestRejectionReason?: string;
-          isPayable: boolean;
-          paymentState: "unpaid" | "pending" | "rejected" | "verified";
-        }>;
-        fineItems: Array<{
-          refId: string;
-          title: string;
-          amount: number;
-          parentFineId: string;
-          isPaid: boolean;
-          isPending: boolean;
-          isWaived: boolean;
-          date: unknown;
-          academicYear?: string;
-          semester?: string;
-          /** Derived from the item's own flags, never from the parent fine. */
-          paymentState: "unpaid" | "pending" | "rejected" | "verified";
-          isPayable: boolean;
-          /** Set only when THIS item was in the declined submission. */
-          latestRejectionReason?: string;
-        }>;
+        fees: FeeDueInternal[];
+        fines: FineDueInternal[];
+        fineItems: FineItemDueInternal[];
       }
     >();
 
@@ -351,25 +224,31 @@ export async function GET(request: NextRequest) {
         .collection("paymentHistory")
         .get();
       const feePaymentLogs = feePaymentHistorySnapshot.docs.map(
-        (paymentDoc) => paymentDoc.data() as PaymentLogRecord
+        (paymentDoc) => ({ id: paymentDoc.id, ...paymentDoc.data() } as PaymentLogForReceipt)
       );
 
       const latestRejectionReason = getLatestRejectedReason(feePaymentLogs);
       const latestHistoryState = getLatestPaymentHistoryState(feePaymentLogs);
+      const latestVerifiedLog = getLatestVerifiedPaymentLog(feePaymentLogs);
+
+      await Promise.all(
+        feePaymentLogs
+          .filter((log) => log.status === "verified" || log.status === "approved")
+          .map((log) => ensureProofLoaded(log.paymentProofId))
+      );
 
       const outstanding = outstandingOf(fee.balance, fee.amount);
+      const settledAmount =
+        asNumber(fee.paidAmount) > 0
+          ? asNumber(fee.paidAmount)
+          : asNumber(fee.amount) > 0
+            ? asNumber(fee.amount)
+            : asNumber(latestVerifiedLog?.amount);
 
-      // Settlement is decided by what is still owed, not by the newest payment
-      // log. A verified PARTIAL payment leaves a real balance; reading the log
-      // alone marked the fee "verified", which made it unpayable while it still
-      // showed an amount — the student could see the debt but not clear it.
       const isSettled =
         SETTLED_RECORD_STATUSES.has(String(fee.status)) || outstanding <= 0;
       const hasPendingSubmission = latestHistoryState === "pending";
 
-      // Anything past `isSettled` still owes money, so it is either awaiting a
-      // decision, freshly declined, or simply unpaid — a stale "verified" from
-      // a partial payment can no longer win here.
       const paymentState: "unpaid" | "pending" | "rejected" | "verified" =
         hasPendingSubmission
           ? "pending"
@@ -379,7 +258,6 @@ export async function GET(request: NextRequest) {
               ? "rejected"
               : "unpaid";
 
-      // Payable whenever money is still owed and nothing is awaiting review.
       const isPayable = !isSettled && !hasPendingSubmission;
       const existing = grouped.get(fee.orgId) ?? {
         orgId: fee.orgId,
@@ -388,7 +266,7 @@ export async function GET(request: NextRequest) {
         paymentSummary: { pending: 0, verified: 0, rejected: 0, unpaid: 0 },
         fees: [],
         fines: [],
-        fineItems:[],
+        fineItems: [],
       };
 
       if (paymentState === "pending") existing.paymentSummary.pending += 1;
@@ -403,17 +281,16 @@ export async function GET(request: NextRequest) {
         id: fee.id,
         description: fee.title || fee.feeType || "Outstanding Fee",
         amount: outstanding,
+        paidAmount: settledAmount,
         dueDate: toIsoDate(fee.dueDate),
         latestRejectionReason,
         isPayable,
-        // Falls back to the term that was actually requested. The old
-        // hard-coded "2025-2026"/"2nd" disagreed with the form's "2026-2027"/
-        // "1st" fallback, and both feed the clearance document id — so a record
-        // missing its term landed in a different clearance doc depending on
-        // which path filled the blank.
         academicYear: fee.academicYear || AY || "",
         semester: fee.semester || semester || "",
         paymentState,
+        isWaived: String(fee.status) === "waived",
+        latestVerifiedLog,
+        fallbackDate: toIsoDate(fee.updatedAt) || toIsoDate(fee.createdAt) || toIsoDate(fee.dueDate),
       });
 
       grouped.set(fee.orgId, existing);
@@ -438,26 +315,25 @@ export async function GET(request: NextRequest) {
 
       const [finePaymentHistorySnapshot, fineItemsSnapshot] = await Promise.all([
         adminDb.collection("fines").doc(fine.id).collection("paymentHistory").get(),
-        fineItemsQuery.get()
+        fineItemsQuery.get(),
       ]);
 
       const finePaymentLogs = finePaymentHistorySnapshot.docs.map(
-        (paymentDoc) => paymentDoc.data() as PaymentLogRecord
+        (paymentDoc) => ({ id: paymentDoc.id, ...paymentDoc.data() } as PaymentLogForReceipt)
       );
 
       const latestRejectionReason = getLatestRejectedReason(finePaymentLogs);
+      const latestVerifiedFineLog = getLatestVerifiedPaymentLog(finePaymentLogs);
+      await Promise.all(
+        finePaymentLogs
+          .filter((log) => log.status === "verified" || log.status === "approved")
+          .map((log) => ensureProofLoaded(log.paymentProofId))
+      );
       const rejectedRefIds = latestRejectionReason
         ? await getRejectedRefIds(finePaymentLogs)
         : new Set<string>();
 
-      // ── Per-item state ───────────────────────────────────────────────────
-      // `isPaid` / `isPending` on the item are the authoritative record: the
-      // admin sets them on every approval (`markFineItemsAsPaid`) and every
-      // rejection (`markFineItemsAsNotPending`). The parent's `status` is a
-      // roll-up — its own `recalculateFines` defines "pending" as "at least one
-      // item is pending" — so reading it as the state of EVERY item made one
-      // submitted item freeze all the student's other fines.
-      const items = [];
+      const items: FineItemDueInternal[] = [];
       for (const itemDoc of fineItemsSnapshot.docs) {
         const fineItem = { id: itemDoc.id, ...itemDoc.data() } as FineItem;
         if (fineItem.isArchived === true || fineItem.metadata?.isArchived === true) {
@@ -485,8 +361,6 @@ export async function GET(request: NextRequest) {
           isPending: pending,
           isWaived: fineItem.isWaived === true,
           date: fineItem.eventDate,
-          // Carried so the submit step never has to guess the term. Falls back
-          // to the requested term rather than to a hard-coded academic year.
           academicYear: fineItem.academicYear || AY || undefined,
           semester: fineItem.semester || semester || undefined,
           paymentState: itemState,
@@ -495,15 +369,10 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // Scoped to the items actually listed. The parent's `balance` accumulates
-      // across every term, so using it here showed a total that could not be
-      // reconciled against the (term-filtered) items shown beneath it.
       const outstanding = items
         .filter((item) => item.isPayable)
         .reduce((sum, item) => sum + item.amount, 0);
 
-      // Roll the group up FROM the items, so the summary and the breakdown can
-      // never disagree.
       const payableItems = items.filter((item) => item.isPayable);
       const paymentState: "unpaid" | "pending" | "rejected" | "verified" =
         items.length === 0
@@ -530,11 +399,6 @@ export async function GET(request: NextRequest) {
         fineItems: [],
       };
 
-      // `fine.fineItemsCount` used to gate the unpaid tally. When the field was
-      // missing, `undefined > 0` is false, so a genuinely unpaid fine never
-      // reached the summary — and `isOrganizationPayable` reads that summary,
-      // which could lock the student out of the organization entirely. The
-      // rolled-up state already knows whether anything is owed.
       if (paymentState === "pending") existing.paymentSummary.pending += 1;
       else if (paymentState === "verified") existing.paymentSummary.verified += 1;
       else if (paymentState === "rejected") existing.paymentSummary.rejected += 1;
@@ -547,15 +411,20 @@ export async function GET(request: NextRequest) {
         id: fine.id,
         description: fine.reason || "Outstanding Fine",
         amount: outstanding,
-        date: toIsoDate(fine.dueDate) || toIsoDate(fine.lastFineIssuedAt),
+        date:
+          toIsoDate(fine.dueDate) ||
+          toIsoDate(fine.lastFineIssuedAt) ||
+          toIsoDate(fine.metadata?.updatedAt) ||
+          toIsoDate(fine.updatedAt),
         reason: fine.reason || "Fine/penalty charge",
         latestRejectionReason,
         isPayable,
         paymentState,
+        latestVerifiedLog: latestVerifiedFineLog,
       });
 
       items.forEach((item) => {
-        existing.fineItems.push(item)
+        existing.fineItems.push(item);
       });
 
       grouped.set(fine.orgId, existing);
@@ -574,21 +443,38 @@ export async function GET(request: NextRequest) {
           ? (orgDocs[index].data() as Record<string, unknown>)
           : undefined;
         const display = buildOrgDisplay(orgId, orgData);
+        const orgName = orgData?.name ? String(orgData.name) : display.name;
+        const orgAcronym = display.acronym;
+        const orgLogoUrl = orgData?.orgLogoUrl ? String(orgData.orgLogoUrl) : null;
+
+        const { fees, fines, fineItems } = attachOrganizationReceipts({
+          orgId,
+          orgName,
+          orgAcronym,
+          orgLogoUrl,
+          studentId,
+          resolvedStudentName,
+          defaultAY: AY,
+          defaultSemester: semester,
+          verifiedProofsById,
+          fees: due.fees,
+          fines: due.fines,
+          fineItems: due.fineItems,
+        });
 
         return {
           id: orgId,
-          name: orgData?.name ? String(orgData.name) : display.name,
-          acronym: display.acronym,
-          // `orgLogoUrl` is the field all three admin apps write and read.
-          orgLogoUrl: orgData?.orgLogoUrl ? String(orgData.orgLogoUrl) : null,
+          name: orgName,
+          acronym: orgAcronym,
+          orgLogoUrl,
           isAcceptingPayments: orgData?.isAcceptingPayments !== false,
           outstandingAmount: due.feeAmount + due.fineAmount,
           feeAmount: due.feeAmount,
           fineAmount: due.fineAmount,
           paymentSummary: due.paymentSummary,
-          fees: due.fees,
-          fines: due.fines,
-          fineItems: due.fineItems,
+          fees,
+          fines,
+          fineItems,
           orgTreasurerName: orgData?.orgTreasurerName || null,
           orgTreasurerUrl: orgData?.orgTreasurerUrl || null,
           orgTreasurerNumber: orgData?.orgTreasurerNumber || null,
