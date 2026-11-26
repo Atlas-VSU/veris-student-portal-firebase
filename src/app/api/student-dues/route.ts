@@ -9,6 +9,7 @@ import {
   getLatestVerifiedPaymentLog,
   loadStudentReceiptContext,
   PaymentLogForReceipt,
+  proxyOrganizationLogoResponse,
   toIsoDate,
   toMillis, 
 } from "./receipt-resolver";
@@ -163,6 +164,11 @@ const buildOrgDisplay = (orgId: string, data: Record<string, unknown> | undefine
 
 export async function GET(request: NextRequest) {
   try {
+    const logoUrl = request.nextUrl.searchParams.get("logoUrl")?.trim();
+    if (logoUrl) {
+      return proxyOrganizationLogoResponse(logoUrl);
+    }
+
     const studentId = request.nextUrl.searchParams.get("studentId")?.trim();
     const AY = request.nextUrl.searchParams.get("AY")?.trim();
     const semester = request.nextUrl.searchParams.get("semester")?.trim();

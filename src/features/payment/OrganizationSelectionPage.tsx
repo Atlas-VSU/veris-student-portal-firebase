@@ -90,11 +90,12 @@ export default function OrganizationSelectionPage({
     return states.includes("unpaid") || states.includes("rejected");
   };
 
-  const hasPayableOrganizations = organizations.some((organization) => isOrganizationPayable(organization));
+  const selectedOrganization = organizations.find((org) => org.id === selectedOrg) || null;
+  const isSelectedOrgPayable = selectedOrganization ? isOrganizationPayable(selectedOrganization) : false;
 
   const handleOrgSelect = (orgId: string) => {
     const org = organizations.find((organization) => organization.id === orgId);
-    if (!org || !isOrganizationPayable(org)) {
+    if (!org) {
       return;
     }
 
@@ -104,7 +105,7 @@ export default function OrganizationSelectionPage({
   const handleContinue = async () => {
     if (isAdvancing) return;
 
-    if (!hasPayableOrganizations) {
+    if (organizations.length === 0) {
       onBack();
       return;
     }
@@ -218,13 +219,8 @@ export default function OrganizationSelectionPage({
                       <button
                         key={org.id}
                         onClick={() => handleOrgSelect(org.id)}
-                        disabled={!isPayable}
-                        className={`w-full text-left p-4 rounded-[1.5rem] border-2 transition-all duration-300 flex items-start justify-between gap-4 outline-none cursor-pointer ${
-                          isPayable
-                            ? "hover:border-primary/50 hover:bg-primary/5"
-                            : "opacity-70 cursor-not-allowed"
-                        } ${
-                          selectedOrg === org.id && isPayable
+                        className={`w-full text-left p-4 rounded-[1.5rem] border-2 transition-all duration-300 flex items-start justify-between gap-4 outline-none cursor-pointer hover:border-primary/50 hover:bg-primary/5 ${
+                          selectedOrg === org.id
                             ? "border-primary bg-primary/5 shadow-soft"
                             : "border-border bg-white/50"
                         }`}
@@ -318,15 +314,15 @@ export default function OrganizationSelectionPage({
                             {!isPayable && (
                               <p className={`mt-2 text-xs font-medium ${org.isAcceptingPayments === false ? "text-amber-700" : "text-muted-foreground"}`}>
                                 {org.isAcceptingPayments === false
-                                  ? "Online payments are temporarily disabled by this organization. Please contact your organization or pay directly at their office."
-                                  : "No payment needed for now. Current submissions are pending or already verified."}
+                                  ? "Online payments are temporarily disabled by this organization. You can still select this organization to view your records and receipts."
+                                  : "No payment needed for now. Select this organization to view your payment records and receipts."}
                               </p>
                             )}
                           </div>
                         </div>
                         <ChevronRight
                           className={`mt-2 hidden h-5 w-5 shrink-0 min-[400px]:block transition-transform duration-300 ${
-                            selectedOrg === org.id && isPayable ? "text-primary translate-x-0.5" : "text-muted-foreground"
+                            selectedOrg === org.id ? "text-primary translate-x-0.5" : "text-muted-foreground"
                           }`}
                         />
                       </button>
@@ -342,7 +338,7 @@ export default function OrganizationSelectionPage({
         <div className="flex justify-end">
           <Button
             onClick={handleContinue}
-            disabled={isLoading || isAdvancing || organizations.length === 0 || (hasPayableOrganizations && !selectedOrg)}
+            disabled={isLoading || isAdvancing || organizations.length === 0 || !selectedOrg}
             className="w-full min-[400px]:w-auto gap-2"
           >
             {isAdvancing ? (
@@ -352,7 +348,11 @@ export default function OrganizationSelectionPage({
               </>
             ) : (
               <>
-                {hasPayableOrganizations ? "Continue to Payment Selection" : "Exit"}
+                {organizations.length === 0
+                  ? "Exit"
+                  : !selectedOrganization || isSelectedOrgPayable
+                    ? "Continue to Payment Selection"
+                    : "View Records & Receipts"}
                 <ChevronRight className="h-4 w-4" />
               </>
             )}
