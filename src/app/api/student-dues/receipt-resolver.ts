@@ -1,4 +1,49 @@
+import { NextResponse } from "next/server";
 import { adminDb } from "@/firebase/firebase-admin.config";
+
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[0-1])\./,
+  /^169\.254\./,
+  /^0\./,
+  /^\[?::1\]?$/,
+];
+
+export async function proxyOrganizationLogoResponse(rawUrl: string): Promise<NextResponse> {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return NextResponse.json({ error: "Invalid logo URL protocol." }, { status: 400 });
+    }
+    if (BLOCKED_HOST_PATTERNS.some((pattern) => pattern.test(parsed.hostname))) {
+      return NextResponse.json({ error: "Disallowed logo host." }, { status: 400 });
+    }
+
+    const upstream = await fetch(parsed.toString());
+    if (!upstream.ok) {
+      return NextResponse.json({ error: "Failed to fetch logo." }, { status: 502 });
+    }
+
+    const contentType = upstream.headers.get("content-type") || "image/png";
+    if (!contentType.toLowerCase().startsWith("image/")) {
+      return NextResponse.json({ error: "Upstream resource is not an image." }, { status: 400 });
+    }
+
+    const buffer = await upstream.arrayBuffer();
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Invalid logo URL." }, { status: 400 });
+  }
+}
 
 export type PaymentLogForReceipt = {
   id?: string;
