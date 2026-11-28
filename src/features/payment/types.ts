@@ -52,17 +52,42 @@ export interface OrganizationData {
  *  API has always returned it, so any narrowing on this union was unsound. */
 export type PaymentState = "unpaid" | "pending" | "rejected" | "verified";
 
+export interface StudentReceiptItem {
+  name: string;
+  type: "fees" | "fines";
+  amount: number;
+}
+
+export interface StudentReceiptData {
+  receiptId: string;
+  studentName: string;
+  studentId: string;
+  orgName: string;
+  orgAcronym: string;
+  orgLogoUrl?: string | null;
+  items: StudentReceiptItem[];
+  total: number;
+  date: string;
+  verifiedByName: string;
+  paymentMethod: string;
+  AY: string;
+  semester: string;
+}
+
 export interface FeeItem {
   id: string;
   description: string;
   title: string;
   amount: number;
+  paidAmount?: number;
   dueDate?: string;
   latestRejectionReason?: string;
   isPayable?: boolean;
   academicYear?: string;
   semester?: string;
   paymentState?: PaymentState;
+  /** Official or reconstructed receipt when the fee payment has been verified. */
+  receipt?: StudentReceiptData;
 }
 
 export interface FineItem {
@@ -82,6 +107,8 @@ export interface FineItem {
   isPayable?: boolean;
   /** Present only when THIS item was part of the declined submission. */
   latestRejectionReason?: string;
+  /** Official or reconstructed receipt when the fine item has been paid (not waived). */
+  receipt?: StudentReceiptData;
 }
 
 export interface Fine {
