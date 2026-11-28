@@ -9,7 +9,10 @@ import { Separator } from "@/components/ui/separator";
 import { CalendarDays, ArrowLeft, BookOpen, Building2, Receipt, AlertCircle, CheckCircle2, Loader2, UserCircle } from "lucide-react";
 import { PaymentBrandHeader } from "./components/PaymentBrandHeader";
 import { PaymentProgressBar } from "./components/PaymentProgressBar";
-import { StudentData, TermData, OrganizationData, FeeItem, Fine, FineItem } from "./types";
+import { OfficialReceiptsCard } from "./components/OfficialReceiptsCard";
+import { StudentReceiptDialog } from "./components/StudentReceiptDialog";
+import { deduplicateReceipts } from "./receipt-print";
+import { StudentData, TermData, OrganizationData, FeeItem, Fine, FineItem, StudentReceiptData } from "./types";
 
 interface FinesFeesSelectionPageProps {
   studentData: StudentData;
@@ -50,6 +53,13 @@ export default function FinesFeesSelectionPage({
   const [selectedFeeIds, setSelectedFeeIds] = useState<Set<string>>(new Set());
   const [selectedFineItemIds, setSelectedFineItemIds] = useState<Set<string>>(new Set());
   const [isAdvancing, setIsAdvancing] = useState(false);
+  const [activeReceipt, setActiveReceipt] = useState<StudentReceiptData | null>(null);
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+
+  const handleOpenReceipt = (receipt: StudentReceiptData) => {
+    setActiveReceipt(receipt);
+    setReceiptDialogOpen(true);
+  };
 
   const toggleId = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
     (id: string) =>
@@ -202,15 +212,19 @@ export default function FinesFeesSelectionPage({
   };
 
   // A student the roster sync has retired is no longer enrolled, so their
-  // records are history to review rather than dues to settle. Nothing here is
-  // selectable, and `submit-payment` refuses them server-side regardless.
-  const isViewOnly = studentData.isArchived === true;
+  // records are history to review rather than dues to settle. Similarly, when
+  // an organization temporarily disables online payments, students can still
+  // inspect their records and print receipts without submitting new payments.
+  const isRetiredStudent = studentData.isArchived === true;
+  const isOrgPaymentsPaused = organizationData.isAcceptingPayments === false;
+  const isViewOnly = isRetiredStudent || isOrgPaymentsPaused;
 
   const hasSelection =
     !isViewOnly && (selectedFees.length > 0 || selectedFineItems.length > 0);
   const selectedCount = selectedFees.length + selectedFineItems.length;
   const hasPayableFees = !isViewOnly && payableFees.length > 0;
   const hasPayableFineItems = !isViewOnly && payableFineItems.length > 0;
+  const hasAnyPayableItems = hasPayableFees || hasPayableFineItems;
 
   // ── Select-all helpers, kept so paying everything is still one click ───────
   const allFeesSelected = hasPayableFees && selectedFees.length === payableFees.length;
@@ -224,6 +238,11 @@ export default function FinesFeesSelectionPage({
     setSelectedFineItemIds(
       checked ? new Set(payableFineItems.map((item) => item.refId)) : new Set()
     );
+
+  const uniqueReceipts = useMemo(
+    () => deduplicateReceipts(fees, activeFineItems),
+    [fees, activeFineItems]
+  );
 
   return (
     <div className="min-h-screen bg-background py-8 pb-36 px-4 relative overflow-hidden font-sans">
@@ -299,7 +318,7 @@ export default function FinesFeesSelectionPage({
           </CardContent>
         </Card>
 
-        {isViewOnly && (
+        {isRetiredStudent && (
           <Card className="border-amber-300 bg-amber-50 shadow-soft">
             <CardContent className="px-4 sm:px-6 py-4">
               <p className="text-sm font-bold text-amber-800">
@@ -313,6 +332,25 @@ export default function FinesFeesSelectionPage({
             </CardContent>
           </Card>
         )}
+
+        {!isRetiredStudent && isOrgPaymentsPaused && (
+          <Card className="border-amber-300 bg-amber-50 shadow-soft">
+            <CardContent className="px-4 sm:px-6 py-4">
+              <p className="text-sm font-bold text-amber-800">
+                Online payments are temporarily disabled by this organization
+              </p>
+              <p className="text-xs text-amber-700 font-medium mt-0.5">
+                You can review your fee and fine records and view or download receipts for
+                approved payments below, but new online payment submissions are currently paused.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <OfficialReceiptsCard
+          receipts={uniqueReceipts}
+          onViewReceipt={handleOpenReceipt}
+        />
 
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Fees Section */}
@@ -444,9 +482,20 @@ export default function FinesFeesSelectionPage({
                           Last rejected reason: {fee.latestRejectionReason}
                         </p>
                       )}
+                      {fee.paymentState === "verified" && (
+                        <p className="text-xs text-green-700 font-medium">
+                          {fee.receipt ? (
+                            <>
+                              Settled · <span className="font-mono">Receipt #{fee.receipt.receiptId}</span>
+                            </>
+                          ) : (
+                            "Settled"
+                          )}
+                        </p>
+                      )}
                     </div>
                     <span className="text-sm font-bold text-primary shrink-0 tabular-nums">
-                      ₱{fee.amount.toFixed(2)}
+                      ₱{(fee.paymentState === "verified" && (fee.paidAmount ?? 0) > 0 ? fee.paidAmount! : fee.amount).toFixed(2)}
                     </span>
                   </div>
                   );
@@ -595,7 +644,15 @@ export default function FinesFeesSelectionPage({
                         )}
                         {fine.isPaid && !fine.isPending && (
                           <p className="text-xs text-green-700 font-medium">
-                            {fine.isWaived ? "Waived by the organization" : "Settled"}
+                            {fine.isWaived ? (
+                              "Waived by the organization"
+                            ) : fine.receipt ? (
+                              <>
+                                Settled · <span className="font-mono">Receipt #{fine.receipt.receiptId}</span>
+                              </>
+                            ) : (
+                              "Settled"
+                            )}
                           </p>
                         )}
                         {/* Only the items that were actually in the declined
@@ -628,7 +685,7 @@ export default function FinesFeesSelectionPage({
         <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-[#FDFCF8]/95 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-float">
           <div className="mx-auto max-w-5xl flex items-center justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
-              {isViewOnly ? (
+              {isViewOnly || !hasAnyPayableItems ? (
                 <>
                   <p className="text-xs text-muted-foreground font-medium">
                     Outstanding on record for this term
@@ -651,9 +708,9 @@ export default function FinesFeesSelectionPage({
                 </>
               )}
             </div>
-            {isViewOnly ? (
+            {isViewOnly || !hasAnyPayableItems ? (
               <Button variant="outline" onClick={onBack} className="shrink-0 px-6 sm:px-8">
-                Back to Terms
+                Back to Organizations
               </Button>
             ) : (
               <Button
@@ -674,6 +731,12 @@ export default function FinesFeesSelectionPage({
           </div>
         </div>
       </div>
+
+      <StudentReceiptDialog
+        open={receiptDialogOpen}
+        onOpenChange={setReceiptDialogOpen}
+        data={activeReceipt}
+      />
     </div>
   );
 }
